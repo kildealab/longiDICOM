@@ -6,7 +6,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib import rcParams
 import json
-import registration_callbacks
+# from registration_callbacks import *
 
 rcParams['figure.figsize'] = 11.7,8.27
 rcParams['font.size'] = 22

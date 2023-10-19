@@ -12,7 +12,8 @@ rcParams['figure.figsize'] = 11.7,8.27
 rcParams['font.size'] = 22
 
 
-from dicom_registration import *
+# sys.path.append('../')
+from Data_Processing.Registration.dicom_registration import *
 
 def find_RS_file(path):
 	for f in os.listdir(path):
