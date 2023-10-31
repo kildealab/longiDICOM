@@ -13,7 +13,7 @@ rcParams['font.size'] = 22
 
 
 # sys.path.append('../')
-from Data_Processing.Registration.dicom_registration import *
+from Registration.dicom_registration import *
 
 def find_RS_file(path):
 	for f in os.listdir(path):
@@ -85,6 +85,7 @@ def get_avg_ROI_z_and_slice(z_lists):
 	TO DO: divide by zero error encountered when submandibular gland contour doesn't exist.
 	'''
 	z_avg = 0
+	print("Z:",z_lists)
 
 	for z_list in z_lists:
 		z_avg += (np.sum(z_list)/len(z_list))
@@ -95,6 +96,30 @@ def get_avg_ROI_z_and_slice(z_lists):
 
 	return roi_slice, z_smg
 
+def get_lowest_ROI_z_and_slice(z_lists):
+	'''
+	Gets the lowest z-value of the set of contour slices.
+	
+	'''
+	print(z_lists)
+	z_min = min([min(z) for z in z_lists])
+	print(z_lists[0])
+	# print(z_min)
+	roi_slice = np.argmin([abs(z-z_min) for z in z_lists[0]]) 
+	# roi_slice = 0
+	print("slice",roi_slice)
+	print("zmin",z_min)
+
+	# z_avg = 0
+
+	# for z_list in z_lists:
+	# 	z_avg += (np.sum(z_list)/len(z_list))
+
+	# z_avg = z_avg/len(z_lists)
+	# roi_slice = np.argmin(abs(z_lists[0] - z_avg)) #TO DO: what if not in this list? but it should ebf ine
+	# z_smg = z_lists[0][roi_slice]
+
+	return roi_slice, z_min
 
 
 def get_start_position_sitk(sitk_image):
@@ -363,13 +388,17 @@ def plot_cropped_multi_v2(json_dict,legacy=False):
 	
 	CT_list = list(json_dict.keys())
 	replan=False
+	print(CT_list)
 	if len(CT_list) > 1: replan = True
 	CBCT_list = list(json_dict[CT_list[0]].keys())
 	columns = 3
 	rows = 1
 	rows_replan = 2 if replan else rows
+	print("replan",replan)
 
+	print(CBCT_list)
 	for i in range(1, columns*rows +1):
+		print(i)
 		try:
 			img = json_dict[CT_list[0]][CBCT_list[i-1]]['pixel_array']
 		except:
@@ -392,18 +421,23 @@ def plot_cropped_multi_v2(json_dict,legacy=False):
 		
 
 	if replan:
+		print(rows_replan)
+		CBCT_list = list(json_dict[CT_list[1]].keys())
+		print(CBCT_list)
 
 		for i in range(columns*rows +1, columns*rows_replan +1):
+			print(i)
 			try:
-				img = json_dict[CT_list[0]][CBCT_list[i-1]]['pixel_array']
+				print(i-columns*rows)
+				img = json_dict[CT_list[1]][CBCT_list[i-columns*rows]]['pixel_array']
 			except:
 				break
 			fig.add_subplot(rows_replan, columns, i)
-			plt.title(CBCT_list[i-1], fontsize=12)
+			plt.title(CBCT_list[i-columns*rows], fontsize=12)
 			plt.imshow(img)
-			iso = json_dict[CT_list[0]][CBCT_list[i-1]]['iso_reg']
-			spacing = json_dict[CT_list[0]][CBCT_list[i-1]]['spacing']
-			origin = json_dict[CT_list[0]][CBCT_list[i-1]]['origin_crop']
+			iso = json_dict[CT_list[1]][CBCT_list[i-columns*rows]]['iso_reg']
+			spacing = json_dict[CT_list[1]][CBCT_list[i-columns*rows]]['spacing']
+			origin = json_dict[CT_list[1]][CBCT_list[i-columns*rows]]['origin_crop']
 			if not legacy:
 				iso_ind_x = (iso[0]-origin[0])/spacing[0]
 				iso_ind_y = (iso[1]-origin[1])/spacing[1]
@@ -423,16 +457,24 @@ def generate_json_v2(patient_path, image_dict,legacy=False,crop_same=True,plot=T
     reference_CT = [CT for CT in image_dict if image_dict[CT]['isReference']][0] 
 #     print(reference_CT) 
     CT_path = patient_path + reference_CT + "/" 
+    print(CT_path)
     RS_file = find_RS_file(CT_path) 
 
     RS = dcm.dcmread(CT_path+RS_file) 
-    subgland_ROI_names = find_ROI_names(RS,keyword='sub') 
-    dict_contours, z_lists = get_all_ROI_contours(subgland_ROI_names, RS) 
-    roi_slice, z_smg = get_avg_ROI_z_and_slice(z_lists) 
+    # subgland_ROI_names = find_ROI_names(RS,keyword='sub')
+    mandible_ROI_names = find_ROI_names(RS, keyword='mandible') 
+    dict_contours, z_lists = get_all_ROI_contours(mandible_ROI_names, RS) 
+    print(z_lists)
+    roi_slice, z_smg = get_lowest_ROI_z_and_slice(z_lists) 
 
     j=0
+    for ct in image_dict:
+    	print(ct)
+    print(image_dict.keys())
     
     for j, CT in enumerate(image_dict):
+        # print(image_dict)
+        print(CT)
 
         json_dict[CT] = {}
         
@@ -442,6 +484,7 @@ def generate_json_v2(patient_path, image_dict,legacy=False,crop_same=True,plot=T
             if i==0 and j==0: 
                 start_x, start_y, start_z, spacing = get_start_position_sitk(CBCT_sitk)  
                 slice_ind = get_image_slice(start_z, z_smg, spacing) # just do this on the CT? 
+                print("SLICE",slice_ind)
 
             final_slice = CBCT_sitk[:,:,slice_ind]
 
@@ -469,7 +512,7 @@ def generate_json_v2(patient_path, image_dict,legacy=False,crop_same=True,plot=T
             json_dict[CT][CBCT]['spacing'] = CBCT_sitk.GetSpacing()
             json_dict[CT][CBCT]['direction']  = CBCT_sitk.GetDirection()
             json_dict[CT][CBCT]['pixel_array'] = cropped_array.tolist()
-        if plot: plot_cropped_multi_v2(json_dict,legacy)
+    if plot: plot_cropped_multi_v2(json_dict,legacy)
     return json_dict
 
 
