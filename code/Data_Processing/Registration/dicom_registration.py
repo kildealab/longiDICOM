@@ -6,6 +6,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib import rcParams
 import json
+from datetime import datetime
 # from registration_callbacks import *
 
 rcParams['figure.figsize'] = 11.7,8.27
@@ -59,6 +60,10 @@ def get_file_lists():
 	# Get list of CT directories
 	CT_list = [d for d in os.listdir(patient_path) if d[9:11] == 'CT' and len(d) == 23]
 	CT_list.sort()
+
+
+	CT_list.sort(key=lambda x: datetime.strptime(x[12:], "%d_%b_%Y"))
+
 	print(CT_list)
 	# Add CT UID to image dict
 	CT_UIDs = []
