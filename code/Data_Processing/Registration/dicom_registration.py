@@ -380,7 +380,96 @@ def register_CBCT_CT(CT, CBCT_list,use_reg_file = True):
 		
 	return resampled_cbct_list, isocenter_list
 
+# TO DO REGISTER TO CBCT 1
+def register_CBCT_CBCT():
+	"""
+	register_CBCT_CT	Registers list of CBCTs to CT.
 
+	:param CT: Name of CT directory.
+	:param CBCT_list: List of names of CBCT directries to be resampled.
+
+	:returns: List of registered sitk CBCT images and isocenters.
+	"""
+
+	ref_CBCT = image_dict[CT_list[0]]['CBCTs'][0]
+	ref_sitk = generate_sitk_image(patient_path+ref_CBCT+'/')
+	print(ref_CBCT)
+
+
+	
+	for CT in image_dict:
+		resampled_cbct_list = []
+
+		for CBCT in image_dict[CT]['CBCTs']:
+			if CBCT == ref_CBCT:
+				continue
+			cbct_path = patient_path+CBCT+'/'
+			CBCT_sitk = generate_sitk_image(cbct_path)
+
+			resampled_cbct, transform = register_images_without_dicom_reg(fixed_image=ref_sitk, moving_image=CBCT_sitk)
+			# registered_isocenter = register_point_without_dicom_reg(isocenter,transform)
+
+			save_transformation(transform,CBCT)
+			resampled_cbct_list.append(resampled_cbct)
+		image_dict[CT]['resampled_CBCTs'] = resampled_cbct_list
+
+
+
+	'''
+	
+	isocenter_list = []
+	registration_file = ''
+
+	CT_sitk = generate_sitk_image(patient_path+CT+'/')
+
+	# Loop through al CBCTs in list
+	for cbct in CBCT_list:
+		print(cbct)
+		cbct_path = patient_path+cbct+'/'
+		CBCT_sitk = generate_sitk_image(cbct_path)
+		isocenter = get_acq_isocenter(cbct_path)[0]
+		# print(isocenter)
+
+		# Find registration file for CBCT directory
+		registration_file=''
+		for f in os.listdir(cbct_path):
+			if f[0:2] == 'RE':
+				registration_file = cbct_path + f
+				continue
+		
+		print("RE - ", registration_file)
+		# If no registration file, register images with optimizer, otherwise use dicom reg file
+		if registration_file =='':# or True: #use_reg_file == False:
+			print("OPTIMIZER")
+		
+			print(CT)
+			has_dicom_reg = False
+			resampled_cbct = None
+			raise SystemExit()
+			# resampled_cbct, transform = register_images_without_dicom_reg(fixed_image=CT_sitk, moving_image=CBCT_sitk)
+			# registered_isocenter = register_point_without_dicom_reg(isocenter,transform)
+
+			# save_transformation(transform,cbct)
+		 
+		else:
+			_, registration_matrix = get_transformation_matrix(registration_file)
+			transform = matrix_to_transform(registration_matrix)
+			# print(transform)
+			resampled_cbct = register_images_with_dicom_reg2(fixed_image=CT_sitk, moving_image=CBCT_sitk, registration_matrix=registration_matrix)
+			registered_isocenter = register_point(isocenter, registration_matrix)
+			
+		resampled_cbct_list.append(resampled_cbct)
+		# print("reg", registered_isocenter)
+		# TO DO: FIX ISOCENTER REGISTRATION
+		# if not legacy and registration_file !='':
+		# 	registered_isocenter = register_point(isocenter, registration_matrix)
+		# else:
+		# registered_isocenter = list(isocenter )# TO DO: Register point
+		isocenter_list.append(registered_isocenter)
+		
+	return resampled_cbct_list, isocenter_list
+
+	'''
 
 def find_CT1_CT2_registration_file_v2(patient_path, CT_list, CT1_ref, CT2_ref):
 	"""
@@ -490,6 +579,7 @@ def register_replan_CBCTs():
 	image_dict[moving_CT]['isReference'] = False
 	
 	for CBCT_sitk in image_dict[moving_CT]['resampled_CBCTs']:
+		print("replanreg")
 		if reg_exists:
 			resampled_cbct = register_images_with_dicom_reg2(fixed_image=reference_CT_sitk, moving_image=CBCT_sitk, registration_matrix=registration_matrix)
 		else:
@@ -505,7 +595,7 @@ def register_replan_CBCTs():
 	image_dict[moving_CT]['resampled_CBCTs'] = resampled_cbct_list_2
 	# image_dict[moving_CT]['isocenters'] = isocenter_list
 
-def produce_plots():
+def produce_plots(zoom=True):
 	"""
 	produce_plots	Plot a sample of registered slices.
 	"""
@@ -522,7 +612,10 @@ def produce_plots():
 	#     img = sitk.GetArrayViewFromImage(resampled_cbct_list_2[i-1])[75]
 		fig.add_subplot(rows_replan, columns, i)
 		plt.title(image_dict[CT_list[0]]['CBCTs'][i-1], fontsize=12)
-		plt.imshow(img[125:375,150:360])
+		if zoom:
+			plt.imshow(img[125:375,150:360])
+		else:
+			plt.imshow(img)
 	
 
 	if replan:
@@ -532,7 +625,10 @@ def produce_plots():
 		#     img = sitk.GetArrayViewFromImage(resampled_cbct_list_2[i-1])[75]
 			fig.add_subplot(rows_replan, columns, i)
 			plt.title(image_dict[CT_list[1]]['CBCTs'][i-(columns*rows+1)], fontsize=12)
-			plt.imshow(img[125:375,150:360])
+			if zoom:
+				plt.imshow(img[125:375,150:360])
+			else:
+				plt.imshow(img)
 	
 	plt.show()
 
@@ -542,7 +638,7 @@ def save_transformation(transform,cbct_name):
 	sitk.WriteTransform(transform, save_path+save_name)
 
 
-def register_patient(path, use_reg_file=False, plot=False):
+def register_patient(path, use_reg_file=False, plot=False,ignore_CT=False):
 	"""
 	register_patient	Call all functions to register all images of te given patient.
 
@@ -559,50 +655,57 @@ def register_patient(path, use_reg_file=False, plot=False):
 	image_dict.clear()
 	replan = False
 	has_dicom_reg = True
+	zoom = True
 
 	
 	print("- Loading files from",patient_path," -")
 	
 	get_file_lists()
 
+	if ignore_CT:
+		print("IGNORINGCTs")
+		register_CBCT_CBCT()
+		zoom = False
 
-	# Register each set of CBCTs to respective CT
-	print("--------------------------------------------------------")
-	print("-                   Registering CBCTs                  -")
-	print("--------------------------------------------------------")
-	# if use_reg_file:
-	for CT in image_dict:
-		image_dict[CT]['resampled_CBCTs'], image_dict[CT]['isocenters'] = register_CBCT_CT(CT, image_dict[CT]['CBCTs'])
-		image_dict[CT]['isReference'] = True
-	# else:
+	else:
 
-	# 	print("not using reg file")
-	# 	CT_0 = ''
-	# 	for CT in image_dict:
-	# 		if CT_0 == '':
-	# 			CT_0 = CT
-	# 		image_dict[CT]['resampled_CBCTs'], image_dict[CT]['isocenters'] = register_CBCT_CT(CT_0, image_dict[CT]['CBCTs'],use_reg_file)
-	# 		image_dict[CT]['isReference'] = False
-	# 	image_dict[CT_0]['isReference'] = True
-
-	plt_CT = False
-	if plt_CT:
-		CT_sitk = generate_sitk_image(patient_path+CT+'/')
-		img = sitk.GetArrayViewFromImage(CT_sitk)[76]
-		plt.imshow(img[125:375,150:360])
-		plt.show()
-
-
-	
-	if replan:
+		# Register each set of CBCTs to respective CT
 		print("--------------------------------------------------------")
-		print("-              REPLAN: Registering CBCTs               -")
+		print("-                   Registering CBCTs                  -")
 		print("--------------------------------------------------------")
-		# if use_reg_file or True:
-		print("Doing replans")
-		register_replan_CBCTs()
+		# if use_reg_file:
+		for CT in image_dict:
+			image_dict[CT]['resampled_CBCTs'], image_dict[CT]['isocenters'] = register_CBCT_CT(CT, image_dict[CT]['CBCTs'])
+			image_dict[CT]['isReference'] = True
+		# else:
 
-	if plot: produce_plots()
+		# 	print("not using reg file")
+		# 	CT_0 = ''
+		# 	for CT in image_dict:
+		# 		if CT_0 == '':
+		# 			CT_0 = CT
+		# 		image_dict[CT]['resampled_CBCTs'], image_dict[CT]['isocenters'] = register_CBCT_CT(CT_0, image_dict[CT]['CBCTs'],use_reg_file)
+		# 		image_dict[CT]['isReference'] = False
+		# 	image_dict[CT_0]['isReference'] = True
+
+		plt_CT = False
+		if plt_CT:
+			CT_sitk = generate_sitk_image(patient_path+CT+'/')
+			img = sitk.GetArrayViewFromImage(CT_sitk)[76]
+			plt.imshow(img[125:375,150:360])
+			plt.show()
+
+
+		
+		if replan:
+			print("--------------------------------------------------------")
+			print("-              REPLAN: Registering CBCTs               -")
+			print("--------------------------------------------------------")
+			# if use_reg_file or True:
+			print("Doing replans")
+			register_replan_CBCTs()
+
+	if plot: produce_plots(zoom)
 	return image_dict
 
 
