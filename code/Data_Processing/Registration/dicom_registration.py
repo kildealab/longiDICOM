@@ -7,7 +7,12 @@ import matplotlib.pyplot as plt
 from matplotlib import rcParams
 import json
 from datetime import datetime
-# from registration_callbacks import *
+import csv
+
+sys.path.append("../")
+# from dicom_registration import *
+from Registration.registration_callbacks import *
+from Registration.registration_utilities import *
 
 rcParams['figure.figsize'] = 11.7,8.27
 rcParams['font.size'] = 22
@@ -20,6 +25,8 @@ patient_path = ''
 has_dicom_reg = True
 image_dict = {}
 CT_list = []
+
+transform_save_path = '/data/kayla/HNC_images/transforms/'
 
 # CT1
 # CT2
@@ -87,8 +94,8 @@ def get_file_lists():
 		global replan
 		replan = True
 
-		if len(CT_list) != 2:
-			raise Warning('More than 2 CT directories found. This code may not perform as expected, as it was made for exactly one replan (2 CTs)')
+		# if len(CT_list) != 2:
+		# 	raise Warning('More than 2 CT directories found. This code may not perform as expected, as it was made for exactly one replan (2 CTs)')
 
  
 	#TO DO: check for whne dates don't work
@@ -97,16 +104,18 @@ def get_file_lists():
 	if replan:
 		#date_replan = CT_list[1][0:8]
 		# alternate dates since dated CTs often wrong
-		date_fx_1 = CBCT_list[0][0:8]
+		# date_fx_1 = CBCT_list[0][0:8]
 		fx_1s = sorted([i for i in CBCT_list if int(i.split("_")[-1][:-1]) == 1])
 		print(fx_1s)
-		date_replan = fx_1s[-1].split("_")[0]
+		date_replan = fx_1s[1].split("_")[0]
 
 		CBCT_list_replan = [CBCT for CBCT in CBCT_list if int(CBCT[0:8]) >= int(date_replan)]
 		CBCT_list =  [CBCT for CBCT in CBCT_list if int(CBCT[0:8]) < int(date_replan)]
 
 		print(CBCT_list)
 		print("REPLNA", CBCT_list_replan)
+
+		
 
 		'''
 		# Divide CBCT list if before or after replan
@@ -128,9 +137,27 @@ def get_file_lists():
 			else:
 				CBCT_list_replan.insert(0,CBCT)
 		'''
+
+		#to do - make better
+		if len(CT_list) == 3:
+			# lCBCTist_replan2 = []
+			# date_fx_1 = CBCT_list[1][0:8]
+			# fx_1s = sorted([i for i in CBCT_list if int(i.split("_")[-1][:-1]) == 1])
+			print(fx_1s)
+			date_replan = fx_1s[2].split("_")[0]
+
+			CBCT_list_replan2 = [CBCT for CBCT in CBCT_list_replan if int(CBCT[0:8]) >= int(date_replan)]
+			CBCT_list_replan =  [CBCT for CBCT in CBCT_list_replan if int(CBCT[0:8]) < int(date_replan)]
+
+			image_dict[CT_list[2]]['CBCTs'] = CBCT_list_replan2
+
+
 		image_dict[CT_list[1]]['CBCTs'] = CBCT_list_replan
+
+
 	
 	image_dict[CT_list[0]]['CBCTs'] = CBCT_list
+
 
 	
 	
@@ -282,6 +309,8 @@ def register_images_without_dicom_reg(fixed_image,moving_image):
 	"""
 
 	#initial alignment of the two volumes
+	'''
+	print("JELLOOOO???")
 	initial_transform = sitk.CenteredTransformInitializer(sitk.Cast(fixed_image,moving_image.GetPixelID()), 
 											  moving_image, 
 											  sitk.Euler3DTransform(), 
@@ -289,13 +318,14 @@ def register_images_without_dicom_reg(fixed_image,moving_image):
 	
 	registration_method = sitk.ImageRegistrationMethod()
 
-	registration_method.SetMetricAsMattesMutualInformation(numberOfHistogramBins=50)
+	# registration_method.SetMetricAsMattesMutualInformation(numberOfHistogramBins=50)
+	registration_method.SetMetricAsMeanSquares()
 	registration_method.SetMetricSamplingStrategy(registration_method.RANDOM)
 	registration_method.SetMetricSamplingPercentage(0.01)
 
 	registration_method.SetInterpolator(sitk.sitkLinear)
 
-	registration_method.SetOptimizerAsGradientDescent(learningRate=1.0, numberOfIterations=100)
+	registration_method.SetOptimizerAsGradientDescent(learningRate=1, numberOfIterations=200)
 	
 	# Scale the step size differently for each parameter, this is critical!!!
 	registration_method.SetOptimizerScalesFromPhysicalShift() 
@@ -303,18 +333,75 @@ def register_images_without_dicom_reg(fixed_image,moving_image):
 	registration_method.SetInitialTransform(initial_transform, inPlace=False)
 
 	## Plot optimization
-	# registration_method.AddCommand(sitk.sitkStartEvent, registration_callbacks.metric_start_plot)
-	# registration_method.AddCommand(sitk.sitkEndEvent, registration_callbacks.metric_end_plot)
-	# registration_method.AddCommand(sitk.sitkIterationEvent, 
-	#                                lambda: registration_callbacks.metric_plot_values(registration_method))
+	registration_method.AddCommand(sitk.sitkStartEvent, registration_callbacks.metric_start_plot)
+	registration_method.AddCommand(sitk.sitkEndEvent, registration_callbacks.metric_end_plot)
+	registration_method.AddCommand(sitk.sitkIterationEvent, 
+	                               lambda: registration_callbacks.metric_plot_values(registration_method))
 
 	final_transform_v1 = registration_method.Execute(sitk.Cast(fixed_image, sitk.sitkFloat32), 
 													 sitk.Cast(moving_image, sitk.sitkFloat32))
+
+	print('Final metric value:',(registration_method.GetMetricValue())	)
+    # print('Optimizer\'s stopping condition,', (registration_method.GetOptimizerStopConditionDescription()))
 	
+	
+
+	# Resample the moving image onto the fixed image's grid
+	resampler = sitk.ResampleImageFilter()
+	resampler.SetReferenceImage(fixed_image)
+	resampler.SetInterpolator(sitk.sitkLinear)
+	resampler.SetDefaultPixelValue(100)
+	resampler.SetTransform(final_transform)
+
 	moving_resampled = sitk.Resample(moving_image,fixed_image,final_transform_v1,sitk.sitkLinear,-1000,moving_image.GetPixelID())
 	# print(final_transform_v1)
-	
-	return moving_resampled, final_transform_v1
+	'''
+	initial_transform = sitk.CenteredTransformInitializer(sitk.Cast(fixed_image,moving_image.GetPixelID()), moving_image, 
+                                                      sitk.AffineTransform(3), sitk.CenteredTransformInitializerFilter.GEOMETRY)
+
+	registration_method = sitk.ImageRegistrationMethod()
+
+	registration_method.SetMetricAsMattesMutualInformation(numberOfHistogramBins=50)
+	# registration_method.SetMetricAsMeanSquares()
+	# registration_method.SetMetricAsCorrelation()
+	registration_method.SetMetricSamplingStrategy(registration_method.RANDOM)
+	registration_method.SetMetricSamplingPercentage(0.01)
+
+	registration_method.SetInterpolator(sitk.sitkLinear)
+
+	# registration_method.SetOptimizerAsGradientDescent(learningRate=.05, numberOfIterations=500,convergenceMinimumValue=1e-6)#, convergenceWindowSize=10)
+	registration_method.SetOptimizerAsRegularStepGradientDescent(
+	        learningRate=.5,
+	        minStep=1e-4,
+	        numberOfIterations=2000,
+	        gradientMagnitudeTolerance=1e-8,
+	    )
+	# Scale the step size differently for each parameter, this is critical!!!
+	# registration_method.SetOptimizerScalesFromPhysicalShift()
+	registration_method.SetOptimizerScalesFromIndexShift()
+
+
+
+	registration_method.SetInitialTransform(initial_transform, inPlace=False)
+
+	## Plot optimization
+	registration_method.AddCommand(sitk.sitkStartEvent, metric_start_plot)
+	registration_method.AddCommand(sitk.sitkEndEvent, metric_end_plot)
+	registration_method.AddCommand(sitk.sitkIterationEvent, 
+	                               lambda: metric_plot_values(registration_method))
+
+	final_transform_v1 = registration_method.Execute(sitk.Cast(fixed_image, sitk.sitkFloat32), 
+	                                                 sitk.Cast(moving_image, sitk.sitkFloat32))
+
+	print('Final metric value:',(registration_method.GetMetricValue()))
+	print('Optimizer\'s stopping condition,', (registration_method.GetOptimizerStopConditionDescription()))
+
+
+	moving_resampled = sitk.Resample(moving_image,fixed_image,final_transform_v1,sitk.sitkLinear,-1000,moving_image.GetPixelID())
+	# print(final_transform_v1)
+
+
+	return moving_resampled, final_transform_v1, registration_method.GetMetricValue(), registration_method.GetOptimizerStopConditionDescription()
 
 
 def register_CBCT_CT(CT, CBCT_list,use_reg_file = True):
@@ -395,82 +482,42 @@ def register_CBCT_CBCT():
 	ref_sitk = generate_sitk_image(patient_path+ref_CBCT+'/')
 	print(ref_CBCT)
 
+	f = open('/data/kayla/HNC_images/reg_stats.csv', 'w')
+
+	# create the csv writer
+	writer = csv.writer(f)
 
 	
 	for CT in image_dict:
 		resampled_cbct_list = []
 
+
 		for CBCT in image_dict[CT]['CBCTs']:
-			if CBCT == ref_CBCT:
-				continue
+
 			cbct_path = patient_path+CBCT+'/'
 			CBCT_sitk = generate_sitk_image(cbct_path)
-
-			resampled_cbct, transform = register_images_without_dicom_reg(fixed_image=ref_sitk, moving_image=CBCT_sitk)
+			if CBCT == ref_CBCT:
+				resampled_cbct_list.append(CBCT_sitk)
+				continue
+			print(CBCT)
+			resampled_cbct, transform, metric,stop  = register_images_without_dicom_reg(fixed_image=ref_sitk, moving_image=CBCT_sitk)
 			# registered_isocenter = register_point_without_dicom_reg(isocenter,transform)
 
 			save_transformation(transform,CBCT)
+			# write a row to the csv file
+			writer.writerow([patient_path.split("/")[-1]+"-"+CBCT,metric,stop])
 			resampled_cbct_list.append(resampled_cbct)
 		image_dict[CT]['resampled_CBCTs'] = resampled_cbct_list
 
 
 
-	'''
+	# close the file
+	f.close()
+		
+
+
+
 	
-	isocenter_list = []
-	registration_file = ''
-
-	CT_sitk = generate_sitk_image(patient_path+CT+'/')
-
-	# Loop through al CBCTs in list
-	for cbct in CBCT_list:
-		print(cbct)
-		cbct_path = patient_path+cbct+'/'
-		CBCT_sitk = generate_sitk_image(cbct_path)
-		isocenter = get_acq_isocenter(cbct_path)[0]
-		# print(isocenter)
-
-		# Find registration file for CBCT directory
-		registration_file=''
-		for f in os.listdir(cbct_path):
-			if f[0:2] == 'RE':
-				registration_file = cbct_path + f
-				continue
-		
-		print("RE - ", registration_file)
-		# If no registration file, register images with optimizer, otherwise use dicom reg file
-		if registration_file =='':# or True: #use_reg_file == False:
-			print("OPTIMIZER")
-		
-			print(CT)
-			has_dicom_reg = False
-			resampled_cbct = None
-			raise SystemExit()
-			# resampled_cbct, transform = register_images_without_dicom_reg(fixed_image=CT_sitk, moving_image=CBCT_sitk)
-			# registered_isocenter = register_point_without_dicom_reg(isocenter,transform)
-
-			# save_transformation(transform,cbct)
-		 
-		else:
-			_, registration_matrix = get_transformation_matrix(registration_file)
-			transform = matrix_to_transform(registration_matrix)
-			# print(transform)
-			resampled_cbct = register_images_with_dicom_reg2(fixed_image=CT_sitk, moving_image=CBCT_sitk, registration_matrix=registration_matrix)
-			registered_isocenter = register_point(isocenter, registration_matrix)
-			
-		resampled_cbct_list.append(resampled_cbct)
-		# print("reg", registered_isocenter)
-		# TO DO: FIX ISOCENTER REGISTRATION
-		# if not legacy and registration_file !='':
-		# 	registered_isocenter = register_point(isocenter, registration_matrix)
-		# else:
-		# registered_isocenter = list(isocenter )# TO DO: Register point
-		isocenter_list.append(registered_isocenter)
-		
-	return resampled_cbct_list, isocenter_list
-
-	'''
-
 def find_CT1_CT2_registration_file_v2(patient_path, CT_list, CT1_ref, CT2_ref):
 	"""
 	find_CT1_CT2_registration_file_v2	Finds the registration file for 2 CTs within the patient directory.
@@ -595,6 +642,34 @@ def register_replan_CBCTs():
 	image_dict[moving_CT]['resampled_CBCTs'] = resampled_cbct_list_2
 	# image_dict[moving_CT]['isocenters'] = isocenter_list
 
+
+
+def apply_transforms_CBCT():
+
+	for CT in image_dict:
+		
+		resampled_cbct_list = []
+		
+		ref_CBCT = image_dict[CT_list[0]]['CBCTs'][0]
+		ref_sitk = generate_sitk_image(patient_path+ref_CBCT+'/')
+
+		for CBCT in image_dict[CT]['CBCTs']:
+			print("Registering ", CBCT)
+			cbct_path = patient_path+CBCT+'/'
+			CBCT_sitk = generate_sitk_image(cbct_path)
+			if CBCT == ref_CBCT:
+				resampled_cbct_list.append(CBCT_sitk)
+				continue
+			
+			transform = sitk.ReadTransform(transform_save_path+patient_path.split('/')[-2]+'-'+CBCT+'.tfm')
+			resampled_cbct = sitk.Resample(CBCT_sitk,ref_sitk,transform,sitk.sitkLinear,-1000,ref_sitk.GetPixelID())
+			
+			resampled_cbct_list.append(resampled_cbct)
+		image_dict[CT]['resampled_CBCTs'] = resampled_cbct_list
+
+
+
+
 def produce_plots(zoom=True):
 	"""
 	produce_plots	Plot a sample of registered slices.
@@ -608,42 +683,55 @@ def produce_plots(zoom=True):
 	print("Replan status: ",replan)
 
 	for i in range(1, columns*rows +1):
-		img = sitk.GetArrayViewFromImage(image_dict[CT_list[0]]['resampled_CBCTs'][i-1])[76]
-	#     img = sitk.GetArrayViewFromImage(resampled_cbct_list_2[i-1])[75]
-		fig.add_subplot(rows_replan, columns, i)
-		plt.title(image_dict[CT_list[0]]['CBCTs'][i-1], fontsize=12)
-		if zoom:
-			plt.imshow(img[125:375,150:360])
-		else:
-			plt.imshow(img)
-	
-
-	if replan:
-
-		for i in range(columns*rows +1, columns*rows_replan +1):
-			img = sitk.GetArrayViewFromImage(image_dict[CT_list[1]]['resampled_CBCTs'][i-(columns*rows+1)])[76]
+		try:
+			img = sitk.GetArrayViewFromImage(image_dict[CT_list[0]]['resampled_CBCTs'][i-1])[76]
 		#     img = sitk.GetArrayViewFromImage(resampled_cbct_list_2[i-1])[75]
 			fig.add_subplot(rows_replan, columns, i)
-			plt.title(image_dict[CT_list[1]]['CBCTs'][i-(columns*rows+1)], fontsize=12)
+			plt.title(image_dict[CT_list[0]]['CBCTs'][i-1], fontsize=12)
 			if zoom:
 				plt.imshow(img[125:375,150:360])
 			else:
 				plt.imshow(img)
+		except:
+			print("Error plotting all")
+
+	if replan:
+
+		for i in range(columns*rows +1, columns*rows_replan +1):
+			try:
+				img = sitk.GetArrayViewFromImage(image_dict[CT_list[1]]['resampled_CBCTs'][i-(columns*rows+1)])[76]
+			#     img = sitk.GetArrayViewFromImage(resampled_cbct_list_2[i-1])[75]
+				fig.add_subplot(rows_replan, columns, i)
+				plt.title(image_dict[CT_list[1]]['CBCTs'][i-(columns*rows+1)], fontsize=12)
+				if zoom:
+					plt.imshow(img[125:375,150:360])
+				else:
+					plt.imshow(img)
+			except:
+				print("error plotting all")
 	
 	plt.show()
 
 def save_transformation(transform,cbct_name):
-	save_path = '/data/kayla/HNC_images/transforms/'
+	# save_path = '/data/kayla/HNC_images/transforms/'
 	save_name = patient_path.split('/')[-2]+'-'+cbct_name+'.tfm'
-	sitk.WriteTransform(transform, save_path+save_name)
+	sitk.WriteTransform(transform, transform_save_path+save_name)
+
+# def save_transformation(transform,cbct_name):
+	
+# 	save_name = patient_path.split('/')[-2]+'-'+cbct_name+'.tfm'
+# 	sitk.WriteTransform(transform, save_path+save_name)
 
 
-def register_patient(path, use_reg_file=False, plot=False,ignore_CT=False):
+
+def register_patient(path, use_reg_file=False, plot=False,ignore_CT=False,use_transforms=False):
 	"""
 	register_patient	Call all functions to register all images of te given patient.
 
 	:param path: Path to the patient directory.
 	:param plot: Flag to plot sample images or not.
+	:param ignore_CT: Registers images to first CBCT using optimizer
+	:param use_transforms: Uses already made SITK transform files if available #TO DO: add check that they are avaiallbe
 	"""
 
 	global patient_path
@@ -664,10 +752,18 @@ def register_patient(path, use_reg_file=False, plot=False,ignore_CT=False):
 
 	if ignore_CT:
 		print("IGNORINGCTs")
-		register_CBCT_CBCT()
+		if use_transforms:
+			apply_transforms_CBCT()
+
+			# transform = sitk.ReadTransform('/data/kayla/HNC_images/transforms/624-20211116_kV_CBCT_1a.tfm')
+		else:
+			register_CBCT_CBCT()
 		zoom = False
 
 	else:
+		if len(CT_list) > 2:
+			raise Warning('More than 2 CT directories found. This code may not perform as expected, as it was made for exactly one replan (2 CTs)')
+
 
 		# Register each set of CBCTs to respective CT
 		print("--------------------------------------------------------")
