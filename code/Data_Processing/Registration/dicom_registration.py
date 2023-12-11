@@ -54,7 +54,7 @@ def get_contour_from_ROI_name(ROI_name, RS):
 	return contour_coords
 
 #TO DO: make nicer, especialy replan part
-def get_file_lists():
+def get_file_lists(patient_path = patient_path):
 	"""
 	get_file_lists 	gets lists of CTs and CBCTs in patient folder whose dir names conform to the following formats:
 					CT: "CT" in 9-10th index position and 23 char length.
@@ -403,6 +403,20 @@ def register_images_without_dicom_reg(fixed_image,moving_image):
 
 	return moving_resampled, final_transform_v1, registration_method.GetMetricValue(), registration_method.GetOptimizerStopConditionDescription()
 
+def get_unregistered_dict(patient_path = patient_path):
+	global image_dict
+	image_dict = {}
+	get_file_lists(patient_path)
+	for CT in image_dict:
+		cbct_list = []
+		for cbct in image_dict[CT]['CBCTs']:
+			
+			cbct_path = patient_path+cbct+'/'
+			CBCT_sitk = generate_sitk_image(cbct_path)
+			cbct_list.append(CBCT_sitk)
+		image_dict[CT]['cbct_list'] = cbct_list
+	return image_dict
+
 
 def register_CBCT_CT(CT, CBCT_list,use_reg_file = True):
 	"""
@@ -748,7 +762,7 @@ def register_patient(path, use_reg_file=False, plot=False,ignore_CT=False,use_tr
 	
 	print("- Loading files from",patient_path," -")
 	
-	get_file_lists()
+	get_file_lists(patient_path)
 
 	if ignore_CT:
 		print("IGNORINGCTs")
