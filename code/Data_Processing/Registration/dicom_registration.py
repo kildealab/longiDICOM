@@ -562,7 +562,7 @@ def register_CBCT_CBCT_crop(slices_below, slices_above, image_dict, patient_path
         return image_dict
 
 
-def register_CBCT_CT(CT, CBCT_list,use_reg_file = True):
+def register_CBCT_CT(CT, CBCT_list,use_reg_file = True,patient_path=patient_path):
         """
         register_CBCT_CT        Registers list of CBCTs to CT.
 
@@ -571,9 +571,11 @@ def register_CBCT_CT(CT, CBCT_list,use_reg_file = True):
 
         :returns: List of registered sitk CBCT images and isocenters.
         """
-        
+        use_reg_file=False
         resampled_cbct_list = []
         isocenter_list = []
+        matrices = []
+        start_positions = []
         registration_file = ''
 
         CT_sitk = generate_sitk_image(patient_path+CT+'/')
@@ -584,36 +586,40 @@ def register_CBCT_CT(CT, CBCT_list,use_reg_file = True):
                 cbct_path = patient_path+cbct+'/'
                 CBCT_sitk = generate_sitk_image(cbct_path)
                 isocenter = get_acq_isocenter(cbct_path)[0]
+                start_position = get_start_position_sitk(CBCT_sitk)
+                start_positions.append(start_position)
                 # print(isocenter)
 
                 # Find registration file for CBCT directory
                 registration_file=''
-                for f in os.listdir(cbct_path):
-                        if f[0:2] == 'RE':
-                                registration_file = cbct_path + f
-                                continue
+                # for f in os.listdir(cbct_path):
+                #         if f[0:2] == 'RE':
+                #                 registration_file = cbct_path + f
+                #                 continue
                 
                 print("RE - ", registration_file)
                 # If no registration file, register images with optimizer, otherwise use dicom reg file
-                if registration_file =='':# or True: #use_reg_file == False:
+                if registration_file =='' or use_reg_file==False:# or True: #use_reg_file == False:
                         print("OPTIMIZER")
                 
                         print(CT)
                         has_dicom_reg = False
                         resampled_cbct = None
-                        raise SystemExit()
-                        # resampled_cbct, transform = register_images_without_dicom_reg(fixed_image=CT_sitk, moving_image=CBCT_sitk)
+                        # raise SystemExit()
+                        resampled_cbct, transform,_,_ = register_images_without_dicom_reg(fixed_image=CT_sitk, moving_image=CBCT_sitk)
                         # registered_isocenter = register_point_without_dicom_reg(isocenter,transform)
 
                         # save_transformation(transform,cbct)
                  
                 else:
                         _, registration_matrix = get_transformation_matrix(registration_file)
+                        matrices.append(registration_matrix)
+                        # print(registration_matrix)
                         transform = matrix_to_transform(registration_matrix)
                         # print(transform)
                         resampled_cbct = register_images_with_dicom_reg2(fixed_image=CT_sitk, moving_image=CBCT_sitk, registration_matrix=registration_matrix)
                         registered_isocenter = register_point(isocenter, registration_matrix)
-                        
+                
                 resampled_cbct_list.append(resampled_cbct)
                 # print("reg", registered_isocenter)
                 # TO DO: FIX ISOCENTER REGISTRATION
@@ -621,9 +627,9 @@ def register_CBCT_CT(CT, CBCT_list,use_reg_file = True):
                 #       registered_isocenter = register_point(isocenter, registration_matrix)
                 # else:
                 # registered_isocenter = list(isocenter )# TO DO: Register point
-                isocenter_list.append(registered_isocenter)
+                # isocenter_list.append(registered_isocenter)
                 
-        return resampled_cbct_list, isocenter_list
+        return resampled_cbct_list, isocenter_list, matrices, start_position
 
 # TO DO REGISTER TO CBCT 1
 def register_CBCT_CBCT():
@@ -930,20 +936,20 @@ def register_patient(path, use_reg_file=False, plot=False,ignore_CT=False,use_tr
                 print("--------------------------------------------------------")
                 print("-                   Registering CBCTs                  -")
                 print("--------------------------------------------------------")
-                # if use_reg_file:
-                for CT in image_dict:
-                        image_dict[CT]['resampled_CBCTs'], image_dict[CT]['isocenters'] = register_CBCT_CT(CT, image_dict[CT]['CBCTs'])
-                        image_dict[CT]['isReference'] = True
-                # else:
+                if use_reg_file:
+                        for CT in image_dict:
+                                image_dict[CT]['resampled_CBCTs'], image_dict[CT]['isocenters'],image_dict[CT]['matrices'],image_dict[CT]['starts'] = register_CBCT_CT(CT, image_dict[CT]['CBCTs'],True,patient_path)
+                                image_dict[CT]['isReference'] = True
+                else:
 
-                #       print("not using reg file")
-                #       CT_0 = ''
-                #       for CT in image_dict:
-                #               if CT_0 == '':
-                #                       CT_0 = CT
-                #               image_dict[CT]['resampled_CBCTs'], image_dict[CT]['isocenters'] = register_CBCT_CT(CT_0, image_dict[CT]['CBCTs'],use_reg_file)
-                #               image_dict[CT]['isReference'] = False
-                #       image_dict[CT_0]['isReference'] = True
+                        print("not using reg file")
+                        CT_0 = ''
+                        for CT in image_dict:
+                                if CT_0 == '':
+                                        CT_0 = CT
+                                image_dict[CT]['resampled_CBCTs']= register_CBCT_CT(CT_0, image_dict[CT]['CBCTs'],use_reg_file,patient_path)
+                                image_dict[CT]['isReference'] = False
+                        image_dict[CT_0]['isReference'] = True
 
                 plt_CT = False
                 if plt_CT:
