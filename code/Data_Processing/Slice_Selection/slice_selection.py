@@ -53,9 +53,13 @@ def get_contour_from_ROI_name(ROI_name, RS):
 
     contour_coords = [] 
     
-    for ROI_contour_seq in RS.ROIContourSequence[index].ContourSequence:
-        contour_coords.append(ROI_contour_seq.ContourData) 
+    if 'ContourSequence' in RS.ROIContourSequence[index]:
         
+        for ROI_contour_seq in RS.ROIContourSequence[index].ContourSequence:
+            contour_coords.append(ROI_contour_seq.ContourData) 
+    else:
+        print("Warning:",ROI_name,"has no contour sequence.")
+            
     return contour_coords
 
 
