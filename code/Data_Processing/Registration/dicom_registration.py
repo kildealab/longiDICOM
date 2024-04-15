@@ -60,7 +60,7 @@ def get_contour_from_ROI_name(ROI_name, RS):
         return contour_coords
 
 #TO DO: make nicer, especialy replan part
-def get_file_lists(patient_path = patient_path):
+def get_file_lists(patient_path = patient_path,return_dict=False):
         """
         get_file_lists  gets lists of CTs and CBCTs in patient folder whose dir names conform to the following formats:
                                         CT: "CT" in 9-10th index position and 23 char length.
@@ -71,6 +71,10 @@ def get_file_lists(patient_path = patient_path):
         global CT_list
         global replan
 
+        if return_dict:
+                image_dict = {}
+                # image_dict.clear()
+                
         replan = False
         # Get list of CT directories
         CT_list = [d for d in os.listdir(patient_path) if d[9:11] == 'CT' and len(d) == 23]
@@ -169,6 +173,8 @@ def get_file_lists(patient_path = patient_path):
 
         
         image_dict[CT_list[0]]['CBCTs'] = CBCT_list
+        if return_dict:
+                return image_dict
 
 
         
@@ -571,7 +577,7 @@ def register_CBCT_CT(CT, CBCT_list,use_reg_file = True,patient_path=patient_path
 
         :returns: List of registered sitk CBCT images and isocenters.
         """
-        use_reg_file=False
+        # use_reg_file=False
         resampled_cbct_list = []
         isocenter_list = []
         matrices = []
@@ -592,10 +598,10 @@ def register_CBCT_CT(CT, CBCT_list,use_reg_file = True,patient_path=patient_path
 
                 # Find registration file for CBCT directory
                 registration_file=''
-                # for f in os.listdir(cbct_path):
-                #         if f[0:2] == 'RE':
-                #                 registration_file = cbct_path + f
-                #                 continue
+                for f in os.listdir(cbct_path):
+                        if f[0:2] == 'RE':
+                                registration_file = cbct_path + f
+                                continue
                 
                 print("RE - ", registration_file)
                 # If no registration file, register images with optimizer, otherwise use dicom reg file
