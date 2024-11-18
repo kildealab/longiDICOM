@@ -70,6 +70,7 @@ def get_file_lists(patient_path = patient_path,return_dict=False):
 
         global CT_list
         global replan
+        global image_dict
 
         if return_dict:
                 image_dict = {}
@@ -264,11 +265,13 @@ def matrix_to_transform(registration_matrix):
         affine_transform.SetTranslation(registration_matrix[:3, -1])
         return affine_transform
 
+
+# Adapted from Brian M Anderson's RegisteringImages repository # Source: https://github.com/brianmanderson/RegisteringImages/blob/main/src/RegisterImages/WithDicomReg.py
 def register_images_with_dicom_reg2(fixed_image: sitk.Image, moving_image: sitk.Image, registration_matrix,
                                                                         min_value=-1000, method=sitk.sitkLinear):
         """
         register_images_with_dicom_reg2 Register a moving image to fixed image using known registratio_matrix from dicom registration file.
-                                                                        Function modified from https://github.com/brianmanderson/RegisteringImages.
+                                        Function modified from https://github.com/brianmanderson/RegisteringImages.
 
         :param fixed_image: The fixed image
         :param moving_image: The moving image
