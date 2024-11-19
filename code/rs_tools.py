@@ -2,7 +2,9 @@
 # rcParams['font.size'] = 22
 
 
-
+import os
+import numpy as np
+import matplotlib.pyplot as plt
 def find_RS_file(path):
     for f in os.listdir(path):
         if 'RS' in f:
