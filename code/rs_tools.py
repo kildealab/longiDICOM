@@ -141,3 +141,68 @@ def plot_ROI(image_array, x, y):
         plt.plot(x, y, 'r-')
 #     plt.plot(256,256,'mo')
     plt.show()
+
+
+def plot_all_contours(RS,image,slice_num,origin,spacing,ignore_terms=[],legend=False):
+    contours_not_on_slice = []
+    plt.subplot(2, 2, 3)
+    all_ROIs = [r for r in find_ROI_names(RS)]
+    for term in ignore_terms:
+        all_ROIs = [r for r in all_ROIs if term.lower() not in r.lower()]
+    
+#     dict_contours, z_lists_b = get_all_ROI_contours(all_ROIs, RS)
+    colours= get_ROI_colour_dict(RS)
+    z_slice = image_to_xyz_coords_single(slice_num, spacing[2],origin[2])[0]
+#     xyz_to_image_coords_single(X,spacing,origin):
+    # print(z_slice)
+    
+    
+    plt.imshow(image[slice_num],cmap='gray')
+    for roi in all_ROIs:
+        # print(roi)
+        dict_contours, z_lists = get_all_ROI_contours([roi], RS)
+        # print("X")
+#         if len(dict_contours) >1:
+        for i,r in enumerate(dict_contours):
+            if r == roi:
+                break
+        try:       
+            roi_slice = get_ROI_slice(z_slice,z_lists[i])
+            # print(len(roi_slice))
+            
+            c =colours[roi]
+            for s in roi_slice:
+                # print(s)
+                # print("**")
+                roi_x, roi_y = get_ROI_pixel_array(dict_contours[roi][s],origin[0],origin[1],spacing)
+                plt.plot(roi_x,roi_y,'-',color=  (c[0]/255,c[1]/255,c[2]/255),label=roi)
+        except Exception as e:
+            contours_not_on_slice.append(roi)
+#             print(roi,"not on slice.")
+        
+    if legend:
+        plt.legend(prop={'size': 8})
+    # print("Other contours not on slice:",contours_not_on_slice)
+    
+    
+
+def get_ROI_colour_dict(RS):
+    index_colour_dict = {}
+    for ROI_contour_seq in RS.ROIContourSequence:
+        index_colour_dict[ROI_contour_seq.ReferencedROINumber] = ROI_contour_seq.ROIDisplayColor
+   
+    name_colour_dict = {}
+    for seq in RS.StructureSetROISequence:
+        name_colour_dict[seq.ROIName] = index_colour_dict[seq.ROINumber]
+
+    return name_colour_dict
+
+
+def image_to_xyz_coords_single(X,spacing,origin):
+    if type(X) is not list:
+        X = [X]
+    X_new = []
+    for x in X:
+        X_new.append(x*spacing+origin)
+        
+    return X_new
