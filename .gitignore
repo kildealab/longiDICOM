@@ -1,5 +1,9 @@
-code/Examples/.ipynb_checkpoints
+Examples/.ipynb_checkpoints/*
 code/Registration/__pycache__/
-code/__pycache__/
-*checkpoint*
-*__pycache__*
+code/__pycache__/*
+code/Slice_Selection/__pycache__*
+.ipynb_checkpoints/
+code/.ipynb_checkpoints/sitk_img_tools-checkpoint.py
+code/Registration/.ipynb_checkpoints/
+code/Slice_Selection/__pycache__/slice_selection.cpython-38.pyc
+Examples/.ipynb_checkpoints/Sample Notebook - Registration-checkpoint.ipynb
