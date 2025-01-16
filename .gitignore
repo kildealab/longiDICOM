@@ -1,3 +1,5 @@
 code/Examples/.ipynb_checkpoints
 code/Registration/__pycache__/
 code/__pycache__/
+*checkpoint*
+*__pycache__*
