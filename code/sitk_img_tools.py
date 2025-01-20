@@ -199,7 +199,7 @@ def save_dicoms(data_directory, sitk_image, output_directory):
                      ]
     
     print(series_tag_values)
-
+ 
 
     #TO DO for generalizability: read in output directory from .env and append patient number + CT or CBCT name from local variables. 
     if not os.path.exists(output_directory):
