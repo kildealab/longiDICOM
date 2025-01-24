@@ -1,12 +1,12 @@
 import os
 import pydicom as dcm
 
-def get_sorted_dicoms(patient_path):
+def get_sorted_RT_files(patient_path):
     RT_path = os.path.join(patient_path, 'RT/')
-    print(RT_path)
     RT_files = os.listdir(RT_path)
-    RT_files_sorted = RT_files.sort(key=lambda x: dcm.read_file(RT_path+x).TreatmentDate)
-    print(RT_files_sorted)
+    RT_files_sorted = sorted(RT_files,key=lambda x: dcm.read_file(RT_path+x).TreatmentDate)
+
+    return RT_files_sorted
     
 '''
 Format 1: Replans restart at fx 1, organized by CT date
@@ -88,3 +88,81 @@ def format_all_patient_fx_numbers(patient_dict):
 #         print(patient)
         new_patient_dict[patient] = format_fraction_numbers(patient_dict[patient])
     return new_patient_dict
+
+
+
+##########################################
+# Get fraction dates by PLAN ID
+##########################################
+
+def get_plan_dict(patient_path):
+    RT_path = os.path.join(patient_path, 'RT/')
+    RT_files = os.listdir(RT_path)
+
+    date_fx_dict = {}
+
+    for file in RT_files:
+        d = dcm.read_file(RT_path+file)
+        ref_plan = d.ReferencedRTPlanSequence[0].ReferencedSOPInstanceUID
+        fraction = d.TreatmentSessionBeamSequence[0].CurrentFractionNumber
+        # if fraction == '34':
+        #     print(d)
+    #     print(fraction)
+        date = d.TreatmentDate 
+        if ref_plan not in date_fx_dict:
+            date_fx_dict[ref_plan] = {}
+
+        date_fx_dict[ref_plan][fraction] = date
+
+    
+    return date_fx_dict
+
+def arrange_fx_date(plan_dict):
+    plans = list(plan_dict.keys())
+    for plan in plans:
+        try:
+            plan_dict[plan][1]
+        except:
+            plan_dict.pop(plan,None)
+            print("Warning: Error with plan",plan)
+    sorted_plans = sorted(plan_dict, key=lambda plan: plan_dict[plan][1])
+
+    fx_date_new = {}
+    plan_num = 0
+    current_last_fx = 0
+    current_fx = 1
+
+    for plan in sorted_plans:
+        for fx in sorted(plan_dict[plan]):
+            fx_date_new[current_fx] = plan_dict[plan][fx]
+            current_fx +=1
+
+    return fx_date_new
+
+def get_plan_start_dates(PATH):
+    patient_dict = {}
+    
+    for patient in sorted(os.listdir(PATH)):
+        if 'b' in patient:
+            continue
+        patient_path = PATH + patient
+        plan_dict = get_plan_dict(patient_path)
+        # print(plan_dict.keys())
+        plans = list(plan_dict.keys())
+        # Error checking to ensure no issues before sorting, 
+        # Inefficient, could be redone
+        for plan in plans:
+            try:
+                plan_dict[plan][1]
+            except Exception as e:
+                print("Warning: patient",patient,'has an error with plan',plan,":",e)
+                plan_dict.pop(plan,None)
+        sorted_plans = sorted(plan_dict.keys(), key=lambda plan: plan_dict[plan][1])
+        
+        plan_start_dates = {}
+        for i,plan in enumerate(sorted_plans):
+            plan_start_dates[i] = plan_dict[plan][1]
+        
+        patient_dict[patient] = plan_start_dates
+
+    return patient_dict
