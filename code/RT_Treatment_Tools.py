@@ -166,3 +166,66 @@ def get_plan_start_dates(PATH):
         patient_dict[patient] = plan_start_dates
 
     return patient_dict
+
+
+def generate_patient_fx_date_dict(PATH):
+    patient_dict = {}
+    
+    for patient in sorted(os.listdir(PATH)):
+        if 'b' in patient:
+            continue
+        patient_path = PATH + patient
+        plan_dict = get_plan_dict(patient_path)
+        fx_date = arrange_fx_date(plan_dict)
+        patient_dict[patient] = fx_date
+        
+    return patient_dict
+
+def get_plan_num_fractions(PATH):
+    patient_dict = {}
+    
+    for patient in sorted(os.listdir(PATH)):
+        if 'b' in patient:
+            continue
+        patient_path = PATH + patient
+        plan_dict = get_plan_dict(patient_path)
+        plans = list(plan_dict.keys())
+        # Error checking to ensure no issues before sorting, 
+        # Inefficient, could be redone
+        for plan in plans:
+            try:
+                plan_dict[plan][1]
+            except Exception as e:
+                print("Warning: patient",patient,'has an error with plan',plan,":",e)
+                plan_dict.pop(plan,None)
+        sorted_plans = sorted(plan_dict, key=lambda plan: plan_dict[plan][1])
+        
+        plan_num_fx = {}
+        for i,plan in enumerate(sorted_plans):
+            plan_num_fx[i] = len(plan_dict[plan])
+        
+        patient_dict[patient] = plan_num_fx
+
+    return patient_dict
+
+
+
+def get_patients_exact_fx_num(patient_dict_fx_dates, num):
+    list_num = []
+
+    for patient in sorted(patient_dict_fx_dates.keys()):
+        num_fx = len(patient_dict_fx_dates[patient])
+        if num_fx == num:
+            list_num.append(patient)
+    return list_num
+
+
+def get_patients_exceeding_fx_num(patient_dict_fx_dates, num):
+    list_over = []
+
+    for patient in sorted(patient_dict_fx_dates.keys()):
+        num_fx = len(patient_dict_fx_dates[patient])
+        if num_fx > num:
+            list_over.append(patient)
+
+    return list_over

@@ -1,3 +1,6 @@
+import os
+import pydicom as dcm
+
 def get_CT_list(patient_path):
     CT_list = [d for d in os.listdir(patient_path) if d[9:11] == 'CT' and (len(d)==23 or len(d)==24) and d[-1].isdigit()]
     
@@ -105,3 +108,51 @@ def check_num_CT_CBCTs(imaging_data):
         if len(entry['CBCT']) != entry['numCBCTs']:
             print("Number of CBCT directories doesn't match actual CBCTs for patient",entry['id'],"--> updating...")
             entry['numCBCTs'] = len(entry['CBCT'])
+
+def get_CBCT_dict_all_patients(PATH):
+    CBCT_data = []
+    list_patients_full = [x for x in os.listdir(PATH) if 'b' not in x and 'old' not in x]
+    list_patients_full.sort(key=int)
+    
+    for patient in list_patients_full:
+        patient_path = os.path.join(PATH,patient)
+    
+        CT_list = get_CT_list(patient_path)
+        if len(CT_list)==0:
+            continue
+    
+        CBCT_list = get_CBCT_list(patient_path)
+            
+    #     CBCTs = []       
+        for CBCT in CBCT_list:
+            i_CBCT_dict = {}
+            CBCT_path = os.path.join(patient_path,CBCT)
+            CBCT_file = sorted(os.listdir(CBCT_path))[0]
+            if CBCT_file[0:2] != 'CT':
+                print("WARNING: No CT files in directory",CBCT_path)
+    
+            else:   
+                fraction = CBCT.split("_")[-1][0:-1]
+                d = dcm.read_file(os.path.join(CBCT_path,sorted(os.listdir(CBCT_path))[0]))
+                date = d.SeriesDate
+                CBCT_data.append({'patientId':patient,'dir_name': CBCT, 'date':date, 'fraction':fraction})
+    return CBCT_data
+
+def get_CT_dates(patient_path,CT_list):
+    CTs = []
+    
+    for CT in CT_list:
+        i_CT_dict = {}
+        CT_path = os.path.join(patient_path,CT)
+
+        CT_file = sorted(os.listdir(CT_path))[0]
+        print(CT_path)
+        if CT_file[0:2] != 'CT':
+            print("WARNING: No CT files in directory",CT_path)
+            
+        else:    
+            d = dcm.read_file(os.path.join(CT_path,CT_file)) # Sorted ensures we grab CT file and not RT
+            date = d.SeriesDate
+            CTs.append(date)
+            
+    return CTs
