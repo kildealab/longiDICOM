@@ -77,3 +77,29 @@ def change_uids(CT_path, output_file_path):
         
         # Save the updated DICOM file
         dicom_data.save_as(output_file_path+'CT.'+new_sop_instance_uid+'.dcm')
+
+
+def get_scan_property_df(keyword=''):
+    #CBCT
+    scan_properties = []
+    index = 0
+    
+    for patient_dir in list_patients:
+        print(patient_dir)
+        list_scan_directories = [x for x in os.listdir(PATH + patient_dir) if keyword in x and x[0] != 'X']
+        list_scan_directories.sort(key=lambda x: int(x.split('_')[0]))
+        
+        for scan_dir in list_scan_directories:
+           
+    #         print(scan_dir)
+            scan_properties.append([index,patient_dir,scan_dir,(scan_dir.split("_")[-1]),int(scan_dir.split("_")[0])])
+
+            scan_properties[index].extend(load_scan_properties(PATH+patient_dir+"/"+scan_dir))
+            
+
+            index += 1
+
+
+    scan_properties_df = pd.DataFrame(np.array(scan_properties), columns = ['index','id','scan_id','fx','date','num_slices','rows','cols','pixel_spacing','slice_thickness','recon_diam'])
+    scan_properties_df.set_index('index')
+    return scan_properties_df
