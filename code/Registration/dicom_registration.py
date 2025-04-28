@@ -23,18 +23,19 @@ from sitk_img_tools import *
 rcParams['figure.figsize'] = 11.7,8.27
 rcParams['font.size'] = 22
 
-
+debug_print = True     
 
 dict_class_UID = {'1.2.840.10008.5.1.4.1.1.2': 'CT', '1.2.840.10008.5.1.4.1.1.481.1': 'RI', '1.2.840.10008.5.1.4.1.1.4': 'MR', '1.2.840.10008.5.1.4.1.1.128':'PE'}
 replan = False
+second_replan = False
 patient_path = ''
 has_dicom_reg = True
 image_dict = {}
 CT_list = []
 
 transform_save_path = '/data/kayla/HNC_images/transforms/'
-CT_CBCT_save_path = '/data/kayla/HNC_images/CBCT_method_dec23/CT_CBCT/'
-CBCT_CBCT_save_path = '/data/kayla/HNC_images/CBCT_method_dec23/CBCT_CBCT/'
+CT_CBCT_save_path = '/data/kayla/HNC_images/FINAL_withreg/CT_CBCT/'
+CBCT_CBCT_save_path = '/data/kayla/HNC_images/FINAL_withreg/CBCT_CBCT/'
 
 # CT1
 # CT2
@@ -85,8 +86,8 @@ def get_file_lists(patient_path = patient_path,return_dict=False):
 
 
         CT_list.sort(key=lambda x: datetime.strptime(x[12:], "%d_%b_%Y"))
-
-        print(CT_list)
+        if debug_print:
+                print(CT_list)
         # Add CT UID to image dict
         CT_UIDs = []
         for CT in CT_list:
@@ -98,21 +99,26 @@ def get_file_lists(patient_path = patient_path,return_dict=False):
         # Get list of CBCT directories
         CBCT_list_replan = []
         CBCT_list = [d for d in os.listdir(patient_path) if d[9:11] == 'kV']
-        print(CBCT_list)
+        if debug_print:
+                print(CBCT_list)
         CBCT_list.sort()
 
         # Raise errors if no CTs found, or if > 2 CTs found
         if len(CT_list) == 0:
                 raise NotADirectoryError('No CT directories were found. Please ensure the following naming convention was used: "YYYYMMDD_CT_DD_MMM_YYYY".')
         
-        elif len(CT_list) > 1: # Set replan to true if > 1 CT
+        if len(CT_list) > 2: # Set replan to true if > 1 CT
+                # global replan
+                second_replan = True
+        if len(CT_list) > 1: # Set replan to true if > 1 CT
                 # global replan
                 replan = True
 
                 # if len(CT_list) != 2:
                 #       raise Warning('More than 2 CT directories found. This code may not perform as expected, as it was made for exactly one replan (2 CTs)')
 
-        print(replan)
+        if debug_print:
+                print(replan)
         #TO DO: check for whne dates don't work
         #TO DO: REDO THIS PART --> GRAB DATES FROM ACTUAL TABLE, THIS ISN'T NECESSARILLY TRUE
         
@@ -121,18 +127,27 @@ def get_file_lists(patient_path = patient_path,return_dict=False):
                 # alternate dates since dated CTs often wrong
                 # date_fx_1 = CBCT_list[0][0:8]
                 fx_1s = sorted([i for i in CBCT_list if int(i.split("_")[-1][:-1]) == 1])
-                print(fx_1s)
+                if debug_print:
+                        print(fx_1s)
                 if len(fx_1s)==1:
                         CBCT_list_replan = []
                 else:
 
                         date_replan = fx_1s[1].split("_")[0]
-
+                        # if second_replan:
+                        #         second_date_replan = fx_1s[2].split("_")[0]
+                        #         CBCT_list_replan = [CBCT for CBCT in CBCT_list if int(CBCT[0:8]) >= int(date_replan) and int(CBCT[0:8]) < int(second_date_replan)]
+                        #         CBCT_list_second_replan = [CBCT for CBCT in CBCT_list if int(CBCT[0:8]) >= int(second_date_replan)]
+                        # else:
                         CBCT_list_replan = [CBCT for CBCT in CBCT_list if int(CBCT[0:8]) >= int(date_replan)]
+                        
                         CBCT_list =  [CBCT for CBCT in CBCT_list if int(CBCT[0:8]) < int(date_replan)]
 
-                print(CBCT_list)
-                print("REPLNA", CBCT_list_replan)
+                if debug_print:
+                        print(CBCT_list)
+                        print("REPLNA", CBCT_list_replan)
+                        # if second_replan:
+                        #         print("2nd REPLNA", CBCT_list_second_replan)
 
                 
 
@@ -159,23 +174,34 @@ def get_file_lists(patient_path = patient_path,return_dict=False):
 
                 #to do - make better
                 if len(CT_list) == 3:
+
                         # lCBCTist_replan2 = []
                         # date_fx_1 = CBCT_list[1][0:8]
                         # fx_1s = sorted([i for i in CBCT_list if int(i.split("_")[-1][:-1]) == 1])
-                        print(fx_1s)
+                        
                         date_replan = fx_1s[2].split("_")[0]
 
                         CBCT_list_replan2 = [CBCT for CBCT in CBCT_list_replan if int(CBCT[0:8]) >= int(date_replan)]
                         CBCT_list_replan =  [CBCT for CBCT in CBCT_list_replan if int(CBCT[0:8]) < int(date_replan)]
 
                         image_dict[CT_list[2]]['CBCTs'] = CBCT_list_replan2
+                        if debug_print:
+                                print(fx_1s)
+                                print("CT_list2:",CBCT_list_replan2)
+                                
+
 
 
                 image_dict[CT_list[1]]['CBCTs'] = CBCT_list_replan
+                if debug_print:
+                        # print(fx_1s)
+                        print("CT_list1:",CBCT_list_replan)
 
 
         
         image_dict[CT_list[0]]['CBCTs'] = CBCT_list
+        if debug_print:
+                print("CTlist:",CBCT_list)
         if return_dict:
                 return image_dict
 
@@ -409,7 +435,10 @@ def get_unregistered_dict(patient_path = patient_path):
         global image_dict
         image_dict = {}
         get_file_lists(patient_path)
-        print("Replan:", replan)
+        if debug_print:
+                
+                print("Replan:", replan)
+
         for CT in image_dict:
                 cbct_list = []
                 for cbct in image_dict[CT]['CBCTs']:
@@ -420,8 +449,9 @@ def get_unregistered_dict(patient_path = patient_path):
                 image_dict[CT]['cbct_list'] = cbct_list
         return image_dict
 
-def register_CT_CBCT(patient_path = patient_path):
-        print(patient_path)
+def register_CT_CBCT(CT_CBCT_save_path,patient_path = patient_path):
+        if debug_print:
+                print(patient_path)
         global image_dict
         image_dict.clear()
         replan = False
@@ -446,7 +476,8 @@ def register_CT_CBCT(patient_path = patient_path):
         # global patient_path
         image_dict = get_unregistered_dict(patient_path)
         
-        print(patient_path)
+        if debug_print:
+                print(patient_path)
         # print(len(image_dict)
 
 
@@ -455,12 +486,16 @@ def register_CT_CBCT(patient_path = patient_path):
                 CT_path = patient_path + CT + "/"
         #     CT_path = patient_path+ '20190122_CT_14_JAN_2019/'
                 CT_sitk = generate_sitk_image(CT_path)
-                print(CT)
+                if debug_print:
+                        print(CT)
 
                 RS_file = find_RS_file(CT_path)
                 RS = dcm.dcmread(CT_path+RS_file)
                 subgland_ROI_names = find_ROI_names(RS,keyword='mandible')
-                print(subgland_ROI_names)
+                if len(subgland_ROI_names) ==0:
+                        print("WARNING: Patient",patient,CT,"has no mandible.")
+                if debug_print:
+                        print(subgland_ROI_names)
                 dict_contours, z_lists = get_all_ROI_contours(subgland_ROI_names, RS)
                 roi_slice, z_smg = get_lowest_ROI_z_and_slice(z_lists)
                 
@@ -468,12 +503,15 @@ def register_CT_CBCT(patient_path = patient_path):
 
 
                 for i,CBCT_sitk in enumerate(image_dict[CT]['cbct_list']):
-                        print(patient_path)
+                        if debug_print:
+                                print(patient_path)
                         CBCT = image_dict[CT]['CBCTs'][i]
-                        print(CBCT)
+                        if debug_print:
+                                print(CBCT)
                         moving_resampled, transform, metric, condition = register_images_without_dicom_reg(CBCT_sitk, CT_sitk)
            
-                        print(metric, condition)
+                        if debug_print:
+                                print(metric, condition)
                 
                         writer.writerow([patient_path.split("/")[-2],CBCT,metric,condition])
 
@@ -482,10 +520,12 @@ def register_CT_CBCT(patient_path = patient_path):
                         
                         z_trans = transform.GetParameters()[-1]
                         z_cbct = z_smg - z_trans
-                        print(z_cbct)
+                        if debug_print:
+                                print(z_cbct)
                         start_x, start_y, start_z, spacing = get_start_position_sitk(CBCT_sitk)
                         slice_ind = get_image_slice(start_z, z_cbct, spacing)
-                        print(slice_ind)
+                        if debug_print:
+                                print(slice_ind)
                         slices_below.append(slice_ind)
                         total_slices = CBCT_sitk.GetSize()[-1]
                         slice_above = total_slices - 1 - slice_ind
@@ -534,10 +574,12 @@ def register_CBCT_CBCT_crop(slices_below, slices_above, image_dict, patient_path
                                 resampled_list.append(ref_sitk)
                                 continue
                         
-                        print(image_dict[CT]['CBCTs'][i])
+                        if debug_print:
+                                print(image_dict[CT]['CBCTs'][i])
                         moving_resampled, transform, metric, condition = register_images_without_dicom_reg(ref_sitk, crop_cbct)
         #         moving_resampled = crop_cbct
-                        print(metric, condition)
+                        if debug_print:
+                                print(metric, condition)
                         writer.writerow([patient_path.split("/")[-2],CBCT,metric,condition])
 
                         save_transformation(transform,CBCT,CBCT_CBCT_save_path+patient_path.split("/")[-2]+'/')
@@ -568,9 +610,11 @@ def register_CBCT_CT(CT, CBCT_list,use_reg_file = True,patient_path=patient_path
 
         CT_sitk = generate_sitk_image(patient_path+CT+'/')
 
+        
         # Loop through al CBCTs in list
         for cbct in CBCT_list:
-                print(cbct)
+                if debug_print:
+                        print(cbct)
                 cbct_path = patient_path+cbct+'/'
                 CBCT_sitk = generate_sitk_image(cbct_path)
                 isocenter = get_acq_isocenter(cbct_path)[0]
@@ -585,12 +629,19 @@ def register_CBCT_CT(CT, CBCT_list,use_reg_file = True,patient_path=patient_path
                                 registration_file = cbct_path + f
                                 continue
                 
-                print("RE - ", registration_file)
+                if debug_print:
+                        print("RE - ", registration_file)
                 # If no registration file, register images with optimizer, otherwise use dicom reg file
                 if registration_file =='' or use_reg_file==False:# or True: #use_reg_file == False:
+                        # raise Exception("NO REGISTRATION FILES FOUND")
+                    #TO DO -- REMOVE THIS, JUST THROWING EXCEPTION FOR NOW
                         print("OPTIMIZER")
+                        with open("/data/kayla/reg_report2.txt", "a") as file:
+                            # Write the new data to the file
+                            print(patient_path.split("/")[-2], cbct, "--> no reg file\n")
+                            file.write(patient_path.split("/")[-2]+ cbct+ "--> no reg file\n")
                 
-                        print(CT)
+                        print(patient_path,cbct)
                         has_dicom_reg = False
                         resampled_cbct = None
                         # raise SystemExit()
@@ -617,7 +668,7 @@ def register_CBCT_CT(CT, CBCT_list,use_reg_file = True,patient_path=patient_path
                 # registered_isocenter = list(isocenter )# TO DO: Register point
                 # isocenter_list.append(registered_isocenter)
                 
-        return resampled_cbct_list, isocenter_list, matrices, start_position
+        return resampled_cbct_list, isocenter_list, matrices, start_positions
 
 # TO DO REGISTER TO CBCT 1
 def register_CBCT_CBCT():
@@ -632,7 +683,9 @@ def register_CBCT_CBCT():
 
         ref_CBCT = image_dict[CT_list[0]]['CBCTs'][0]
         ref_sitk = generate_sitk_image(patient_path+ref_CBCT+'/')
-        print(ref_CBCT)
+        if debug_print:
+                
+                print(ref_CBCT)
 
         f = open('/data/kayla/HNC_images/reg_stats.csv', 'a',newline='')
 
@@ -651,7 +704,8 @@ def register_CBCT_CBCT():
                         if CBCT == ref_CBCT:
                                 resampled_cbct_list.append(CBCT_sitk)
                                 continue
-                        print(CBCT)
+                        if debug_print:
+                                print(CBCT)
                         resampled_cbct, transform, metric,stop  = register_images_without_dicom_reg(fixed_image=ref_sitk, moving_image=CBCT_sitk)
                         # registered_isocenter = register_point_without_dicom_reg(isocenter,transform)
 
@@ -690,13 +744,17 @@ def find_CT1_CT2_registration_file_v2(patient_path, CT_list, CT1_ref, CT2_ref):
 
         # Find REG files in CT direcories
         for CT in CT_list:
-                print("Searching for RE...")
-                print(CT)
+                if debug_print:
+                
+                        print("Searching for RE...")
+                        print(CT)
                 re_dirs = [f for f in os.listdir(patient_path+CT) if f[0:2] == 'RE']
                 if len(re_dirs)!=0:
                         RE_found = True
                 list_REs.append([f for f in os.listdir(patient_path+CT) if f[0:2] == 'RE'])
-                print(list_REs)
+                if debug_print:
+                
+                        print(list_REs)
 
         # If no RE files found, check for RE files outside of CT diretcories
         if (not RE_found):
@@ -714,7 +772,9 @@ def find_CT1_CT2_registration_file_v2(patient_path, CT_list, CT1_ref, CT2_ref):
                                 r1 = dcm.read_file(patient_path+CT_list[i]+'/'+reg)
                         CT1_ref_exist = False
                         CT2_ref_exist = False
-                        print("-------",reg,"-------")
+                        if debug_print:
+                
+                                print("-------",reg,"-------")
                         for seq in r1.RegistrationSequence:
                                 class_UID = seq.ReferencedImageSequence[0].ReferencedSOPClassUID
                 #         if (dict_class_UID[class_UID] =='MR'):
@@ -731,14 +791,16 @@ def find_CT1_CT2_registration_file_v2(patient_path, CT_list, CT1_ref, CT2_ref):
                                 ref_CT = CT_list[i]
                                 registration_file = reg
                                 reg_index = i
-                                print("************************************************************************************************")
-                                print("*               ",registration_file,"               *")
-                                print("************************************************************************************************")
+                                if debug_print:
+                        
+                                        print("************************************************************************************************")
+                                        print("*               ",registration_file,"               *")
+                                        print("************************************************************************************************")
                                 continue
 
         return ref_CT, registration_file
 
-def register_replan_CBCTs():
+def register_replan_CBCTs(second_replan=False):
         """
         register_replan_CBCTs: Register CBCTs after replan a second time.
         """
@@ -748,8 +810,17 @@ def register_replan_CBCTs():
         reg_exists = False
 
         
-
         reg_dir, registration_file = find_CT1_CT2_registration_file_v2(patient_path, CT_list, image_dict[CT_list[0]]['UID'],image_dict[CT_list[1]]['UID'])
+
+        if second_replan:
+                print("WHY SECOND REOPLANNNN")
+                reg_dir, registration_file = find_CT1_CT2_registration_file_v2(patient_path, CT_list, image_dict[CT_list[1]]['UID'],image_dict[CT_list[2]]['UID'])
+                if reg_dir == '':
+                        reg_dir, registration_file = find_CT1_CT2_registration_file_v2(patient_path, CT_list, image_dict[CT_list[0]]['UID'],image_dict[CT_list[2]]['UID'])
+
+
+
+
 
         if registration_file !='':# and False:
                 reg_exists = True
@@ -769,7 +840,7 @@ def register_replan_CBCTs():
         
 
         if not reg_exists:
-                raise SystemExit()
+                # raise SystemExit()
                 moving_CT = list(image_dict.keys())[1]
                 reference_CT = list(image_dict.keys())[0]
 
@@ -778,13 +849,14 @@ def register_replan_CBCTs():
         image_dict[moving_CT]['isReference'] = False
         
         for CBCT_sitk in image_dict[moving_CT]['resampled_CBCTs']:
-                print("replanreg")
+                if debug_print:
+                        print("replanreg")
                 if reg_exists:
                         resampled_cbct = register_images_with_dicom_reg2(fixed_image=reference_CT_sitk, moving_image=CBCT_sitk, registration_matrix=registration_matrix)
                 else:
                         print("replanned no reg")
-                        raise SystemExit()
-                        # resampled_cbct, transform = register_images_without_dicom_reg(fixed_image=reference_CT_sitk,moving_image=CBCT_sitk)
+                        # raise SystemExit()
+                        resampled_cbct, transform,_,_ = register_images_without_dicom_reg(fixed_image=reference_CT_sitk,moving_image=CBCT_sitk)
                 resampled_cbct_list_2.append(resampled_cbct)
 
         # for isocenter in image_dict[moving_CT]['isocenters']:
@@ -820,48 +892,159 @@ def apply_transforms_CBCT():
                 image_dict[CT]['resampled_CBCTs'] = resampled_cbct_list
 
 
+def find_multi_CT_regs(CT_list):
+    dict_regs = {}
+    # patient_path = path
+    list_REs = []
+    UID_list = []
+    for CT in CT_list:
+        files = [f for f in os.listdir(patient_path+CT+'/') if 'CT' in f]
+        UID_list.append(dcm.read_file(patient_path+CT+'/'+files[0]).FrameOfReferenceUID)
+    for i, CT in enumerate(CT_list):
+        dict_regs[CT] = {}
+        list_REs
+        re_dirs = [f for f in os.listdir(patient_path+CT) if f[0:2] == 'RE']
+    
+        list_REs = [f for f in os.listdir(patient_path+CT) if f[0:2] == 'RE']
+        registration_file = ''
+        ref_CT = ''
+       
+        
+        for j in range(0,len(list_REs)):
+                for reg in list_REs:
+                    print("trying", reg)
+                    r1 = dcm.read_file(patient_path+CT_list[i]+'/'+reg)
+                    CT1_ref_exist = False
+                    CT2_ref_exist = False
+                    good = True
+                    for seq in r1.RegistrationSequence:
+                        uid = seq.FrameOfReferenceUID
+                        if uid not in UID_list:
+                            good = False
+                            break
+                            
+                    
+                    if good:
+
+                        for seq in r1.RegistrationSequence:
+                            class_UID = seq.ReferencedImageSequence[0].ReferencedSOPClassUID
+                            registration_matrix = np.asarray(seq.MatrixRegistrationSequence[-1].
+                                                                                 MatrixSequence[-1].FrameOfReferenceTransformationMatrix)#.reshape((4, 4))
+                            identity = [1., 0., 0., 0., 0., 1., 0., 0., 0., 0., 1., 0., 0., 0., 0., 1.]
+        
+                            
+                            if list(registration_matrix) == identity:
+                                ref = seq.FrameOfReferenceUID
+                            else:
+                                move = seq.FrameOfReferenceUID
+        
+        
+                        dict_regs[CT][reg] = {
+                            "moving": move,
+                            "reference": ref
+                        }
+    return dict_regs
+    
+
+def get_num_refs(dict_regs):
+    num_refs = {}
+    for CT in dict_regs:
+        for reg in dict_regs[CT]:
+            reg_UID = dict_regs[CT][reg]['reference']
+            if reg_UID not in num_refs:
+                num_refs[reg_UID] = 0
+            num_refs[reg_UID]+=1
+    return num_refs
+
+def register_double_replan(dict_regs):
+    num_refs = get_num_refs(dict_regs)
 
 
-def produce_plots(zoom=True):
+    for uid in num_refs:
+        if num_refs[uid] ==2: #Only works for 2 refs rn (ie two of the 3 CTs were registered to the same CT)
+            ref_uid = uid
+            break
+    uid_dict = {}
+    for CT in image_dict:
+        uid_dict[image_dict[CT]['UID']] = CT    
+    
+    for reg_dir in dict_regs:
+        for reg_file in dict_regs[reg_dir]:
+            resampled_cbct_list_2 = []
+            if dict_regs[reg_dir][reg_file]['reference'] == ref_uid:
+                moving_CT = uid_dict[dict_regs[reg_dir][reg_file]['moving']]
+                reference_CT =  uid_dict[dict_regs[reg_dir][reg_file]['reference']]
+                print("Registering", moving_CT,"to",reference_CT)
+                reference_CT_sitk = generate_sitk_image(patient_path+reference_CT+"/")
+                image_dict[moving_CT]['isReference'] = False
+                moving_reference_UID, registration_matrix = get_transformation_matrix(patient_path+reg_dir+'/'+reg_file)
+                
+                for CBCT_sitk in image_dict[moving_CT]['resampled_CBCTs']:
+                     resampled_cbct = register_images_with_dicom_reg2(fixed_image=reference_CT_sitk, moving_image=CBCT_sitk, registration_matrix=registration_matrix)
+                     resampled_cbct_list_2.append(resampled_cbct)
+                image_dict[moving_CT]['resampled_CBCTs'] = resampled_cbct_list_2
+
+def produce_plots(zoom=True,second_replan=False):
         """
         produce_plots   Plot a sample of registered slices.
         """
 
-        fig = plt.figure(figsize=(20, 10))
-        
+
+        if second_replan:
+            fig = plt.figure(figsize=(20, 20))
+        else:
+            fig = plt.figure(figsize=(20, 10))
+            
+
         columns = 3
         rows = 1
         rows_replan = 2 if replan else rows
-        print("Replan status: ",replan)
+        rows_replan_second = 3 if second_replan else rows_replan
 
-        for i in range(1, columns*rows +1):
-                try:
-                        img = sitk.GetArrayViewFromImage(image_dict[CT_list[0]]['resampled_CBCTs'][i-1])[76]
-                #     img = sitk.GetArrayViewFromImage(resampled_cbct_list_2[i-1])[75]
-                        fig.add_subplot(rows_replan, columns, i)
-                        plt.title(image_dict[CT_list[0]]['CBCTs'][i-1], fontsize=12)
-                        if zoom:
-                                plt.imshow(img[125:375,150:360])
-                        else:
-                                plt.imshow(img)
-                except:
-                        print("Error plotting all")
+        print("Replan status: ", replan, second_replan)
+        print("rows: ", rows_replan_second)
 
+        # Plotting the first set of images
+        for i in range(1, columns * rows + 1):
+            try:
+                img = sitk.GetArrayViewFromImage(image_dict[CT_list[0]]['resampled_CBCTs'][i-1])[76]
+                fig.add_subplot(rows_replan_second, columns, i)
+                plt.title(image_dict[CT_list[0]]['CBCTs'][i-1], fontsize=12)
+                if zoom:
+                    plt.imshow(img[125:375, 150:360])
+                else:
+                    plt.imshow(img)
+            except Exception as e:
+                print("Error plotting all:", e)
+
+        # Plotting the replan set of images
         if replan:
+            for i in range(columns * rows + 1, columns * rows_replan + 1):
+                try:
+                    img = sitk.GetArrayViewFromImage(image_dict[CT_list[1]]['resampled_CBCTs'][i - (columns * rows) - 1])[76]
+                    fig.add_subplot(rows_replan_second, columns, i)
+                    plt.title(image_dict[CT_list[1]]['CBCTs'][i - (columns * rows) - 1], fontsize=12)
+                    if zoom:
+                        plt.imshow(img[125:375, 150:360])
+                    else:
+                        plt.imshow(img)
+                except Exception as e:
+                    print("Error plotting all:", e)
 
-                for i in range(columns*rows +1, columns*rows_replan +1):
-                        try:
-                                img = sitk.GetArrayViewFromImage(image_dict[CT_list[1]]['resampled_CBCTs'][i-(columns*rows+1)])[76]
-                        #     img = sitk.GetArrayViewFromImage(resampled_cbct_list_2[i-1])[75]
-                                fig.add_subplot(rows_replan, columns, i)
-                                plt.title(image_dict[CT_list[1]]['CBCTs'][i-(columns*rows+1)], fontsize=12)
-                                if zoom:
-                                        plt.imshow(img[125:375,150:360])
-                                else:
-                                        plt.imshow(img)
-                        except:
-                                print("error plotting all")
-        
+        # Plotting the second replan set of images
+        if second_replan:
+            for i in range(columns * rows_replan + 1, columns * rows_replan_second + 1):
+                try:
+                    img = sitk.GetArrayViewFromImage(image_dict[CT_list[2]]['resampled_CBCTs'][i - (columns * rows_replan) - 1])[76]
+                    fig.add_subplot(rows_replan_second, columns, i)
+                    plt.title(image_dict[CT_list[2]]['CBCTs'][i - (columns * rows_replan) - 1], fontsize=12)
+                    if zoom:
+                        plt.imshow(img[125:375, 150:360])
+                    else:
+                        plt.imshow(img)
+                except Exception as e:
+                    print("Error plotting all:", e)
+
         plt.show()
 
 def save_transformation(transform,cbct_name,save_path = transform_save_path):
@@ -877,9 +1060,24 @@ def save_transformation(transform,cbct_name,save_path = transform_save_path):
 #       save_name = patient_path.split('/')[-2]+'-'+cbct_name+'.tfm'
 #       sitk.WriteTransform(transform, save_path+save_name)
 
+def save_registered_CBCTs(input_path,save_path, patient, image_dict):
+    patient_save_path = os.path.join(save_path,patient)
+    if not os.path.isdir(patient_save_path):
+        os.mkdir(patient_save_path)
+    for CT in image_dict:
+        for i,CBCT_name in enumerate(image_dict[CT]['CBCTs']):
+            CBCT_path = os.path.join(input_path,CBCT_name)
+            # print(CBCT_name)
+            CBCT_sitk = image_dict[CT]['resampled_CBCTs'][i]
+            CBCT_save_path = os.path.join(patient_save_path, CBCT_name)
+            if not os.path.isdir(CBCT_save_path):
+                os.mkdir(CBCT_save_path)
+
+            save_dicoms(CBCT_path, CBCT_sitk, CBCT_save_path)    
 
 
-def register_patient(path, use_reg_file=False, plot=False,ignore_CT=False,use_transforms=False):
+
+def register_patient(path, use_reg_file=True, plot=False,ignore_CT=False,use_transforms=False,save_CBCT=False):
         """
         register_patient        Call all functions to register all images of te given patient.
 
@@ -891,17 +1089,20 @@ def register_patient(path, use_reg_file=False, plot=False,ignore_CT=False,use_tr
 
         global patient_path
         global replan
+        global second_replan
         
         patient_path = path
-        print(patient_path)
+        if debug_print:
+                
+                print(patient_path)
 
         image_dict.clear()
         replan = False
         has_dicom_reg = True
         zoom = True
 
-        
-        print("- Loading files from",patient_path," -")
+        if debug_print:
+                print("- Loading files from",patient_path," -")
         
         get_file_lists(patient_path)
 
@@ -917,17 +1118,21 @@ def register_patient(path, use_reg_file=False, plot=False,ignore_CT=False,use_tr
 
         else:
                 if len(CT_list) > 2:
-                        raise Warning('More than 2 CT directories found. This code may not perform as expected, as it was made for exactly one replan (2 CTs)')
+                        print("SECOND REPLAN")
+                        second_replan = True
+                        # raise Warning('More than 2 CT directories found. This code may not perform as expected, as it was made for exactly one replan (2 CTs)')
 
-
-                # Register each set of CBCTs to respective CT
-                print("--------------------------------------------------------")
-                print("-                   Registering CBCTs                  -")
-                print("--------------------------------------------------------")
+                if debug_print:
+                
+                        # Register each set of CBCTs to respective CT
+                        print("--------------------------------------------------------")
+                        print("-                   Registering CBCTs                  -")
+                        print("--------------------------------------------------------")
                 if use_reg_file:
                         for CT in image_dict:
                                 image_dict[CT]['resampled_CBCTs'], image_dict[CT]['isocenters'],image_dict[CT]['matrices'],image_dict[CT]['starts'] = register_CBCT_CT(CT, image_dict[CT]['CBCTs'],True,patient_path)
                                 image_dict[CT]['isReference'] = True
+
                 else:
 
                         print("not using reg file")
@@ -948,15 +1153,35 @@ def register_patient(path, use_reg_file=False, plot=False,ignore_CT=False,use_tr
 
 
                 
-                if replan:
-                        print("--------------------------------------------------------")
-                        print("-              REPLAN: Registering CBCTs               -")
-                        print("--------------------------------------------------------")
-                        # if use_reg_file or True:
-                        print("Doing replans")
-                        register_replan_CBCTs()
+                if second_replan:
+                        
+                        if debug_print:
+                
+                                print("--------------------------------------------------------")
+                                print("-           TWO REPLANS: Registering CBCTs           -")
+                                print("--------------------------------------------------------")
+                                # if use_reg_file or True:
+                                print("Doing replans")
 
-        if plot: produce_plots(zoom)
+                        dict_regs = find_multi_CT_regs(sorted(list(image_dict.keys())))
+                        # num_refs = get_num_refs(dict_regs)
+                        register_double_replan(dict_regs)
+                        
+
+                elif replan:
+                        if debug_print:
+                
+                                print("--------------------------------------------------------")
+                                print("-              REPLAN: Registering CBCTs               -")
+                                print("--------------------------------------------------------")
+                                # if use_reg_file or True:
+                                print("Doing replans")
+                        register_replan_CBCTs()
+                
+
+        if plot: produce_plots(zoom,second_replan)
+
+
         return image_dict
 
 
