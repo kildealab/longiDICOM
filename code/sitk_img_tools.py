@@ -188,6 +188,8 @@ def save_dicoms(data_directory, sitk_image, output_directory):
     
     direction = filtered_image.GetDirection()
 
+    slice_thickness = filtered_image.GetSpacing()[2]
+
     # Copy some of the tags and add the relevant tags indicating the change.
     # For the series instance UID (0020|000e), each of the components is a number, cannot start
     # with zero, and separated by a '.' We create a unique series ID using the date and time.
@@ -195,10 +197,11 @@ def save_dicoms(data_directory, sitk_image, output_directory):
     series_tag_values = [(k, series_reader.GetMetaData(0,k)) for k in tags_to_copy_CBCT if series_reader.HasMetaDataKey(0,k)] + \
                      [("0008|0031",modification_time), # Series Time
                       ("0008|0021",modification_date), # Series Date
-                      ("0018|0050", '3.0') #hard-coding the slice thickness because CTs always have thickness = 3.0 mm 
+                      # ("0018|0050", '3.0') #hard-coding the slice thickness because CTs always have thickness = 3.0 mm # REMOVE HARDCODING
+                      ("0018|0050",str(slice_thickness))
                      ]
     
-    print(series_tag_values)
+    # print(series_tag_values)
 
 
     #TO DO for generalizability: read in output directory from .env and append patient number + CT or CBCT name from local variables. 
@@ -216,7 +219,8 @@ def save_dicoms(data_directory, sitk_image, output_directory):
         image_slice.SetMetaData("0008|0013", time.strftime("%H%M%S")) # Instance Creation Time
         image_slice.SetMetaData("0020|0032", '\\'.join(map(str,filtered_image.TransformIndexToPhysicalPoint((0,0,i))))) # Image Position (Patient)
         image_slice.SetMetaData("0020|0013", str(i)) # Instance Number
-        image_slice.SetMetaData("0018|0050", '3.0') #setting thickness to 3.0mm just in case it wasn't previously copied
+        image_slice.SetMetaData("0018|0050",str(slice_thickness))
+        # image_slice.SetMetaData("0018|0050", '3.0') #setting thickness to 3.0mm just in case it wasn't previously copied
         
         # Write to the output directory and add the extension dcm, to force writing in DICOM format.
         new_UID = generate_uid()
