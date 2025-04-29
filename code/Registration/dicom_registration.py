@@ -18,12 +18,12 @@ from Registration.registration_utilities import *
 # from Slice_Selection.slice_selection import *
 from rs_tools import *
 from sitk_img_tools import *
-
+from Registration.registration_core import *
 
 rcParams['figure.figsize'] = 11.7,8.27
 rcParams['font.size'] = 22
 
-debug_print = True     
+debug_print = False     
 
 dict_class_UID = {'1.2.840.10008.5.1.4.1.1.2': 'CT', '1.2.840.10008.5.1.4.1.1.481.1': 'RI', '1.2.840.10008.5.1.4.1.1.4': 'MR', '1.2.840.10008.5.1.4.1.1.128':'PE'}
 replan = False
@@ -33,34 +33,10 @@ has_dicom_reg = True
 image_dict = {}
 CT_list = []
 
-transform_save_path = '/data/kayla/HNC_images/transforms/'
-CT_CBCT_save_path = '/data/kayla/HNC_images/FINAL_withreg/CT_CBCT/'
-CBCT_CBCT_save_path = '/data/kayla/HNC_images/FINAL_withreg/CBCT_CBCT/'
+transform_save_path = 'insert-path-here'#'/data/kayla/HNC_images/transforms/'
+CT_CBCT_save_path = 'insert-path-here'#'/data/kayla/HNC_images/FINAL_withreg/CT_CBCT/'
+CBCT_CBCT_save_path = 'insert-path-here'#'/data/kayla/HNC_images/FINAL_withreg/CBCT_CBCT/'
 
-# CT1
-# CT2
-def find_ROI_names(RS, keyword=''):
-        ROI_names = []
-
-        for seq in RS.StructureSetROISequence:
-                roi_name = seq.ROIName
-                if keyword.lower() in roi_name.lower() and 'nos' not in roi_name.lower() and 'z_' not in roi_name.lower():
-                        ROI_names.append(seq.ROIName)
-        return ROI_names
-
-
-def get_contour_from_ROI_name(ROI_name, RS):
-        for i, seq in enumerate(RS.StructureSetROISequence):
-                if seq.ROIName == ROI_name:
-                        index = i
-                        break
-
-        contour_coords = []
-
-        for ROI_contour_seq in RS.ROIContourSequence[index].ContourSequence:
-                contour_coords.append(ROI_contour_seq.ContourData)
-
-        return contour_coords
 
 #TO DO: make nicer, especialy replan part
 def get_file_lists(patient_path = patient_path,return_dict=False):
@@ -241,195 +217,6 @@ def get_acq_isocenter(CBCT_path):
         isocenter = get_contour_from_ROI_name(names[0], RS)
         return isocenter
 
-
-def get_transformation_matrix(registration_file):
-        """
-        get_transformation_matrix       Gets the transformation matrix from the DICOM Registration file.
-
-        :param registration_file: Path to registration file. 
-
-        :returns: The Frame of Reference UID of the moving image (to be registered) and the registration matrix
-        """
-
-        reg = dcm.read_file(registration_file)
-
-        # Find the trasnformation matrix that is not the identity matrix
-        for seq in reg.RegistrationSequence:
-
-                registration_matrix = np.asarray(seq.MatrixRegistrationSequence[-1].
-                                                                                 MatrixSequence[-1].FrameOfReferenceTransformationMatrix)#.reshape((4, 4))
-                identity = [1., 0., 0., 0., 0., 1., 0., 0., 0., 0., 1., 0., 0., 0., 0., 1.]
-
-                if list(registration_matrix) != identity:
-                        return seq.FrameOfReferenceUID, registration_matrix.reshape(4,4)
-
-def matrix_to_transform(registration_matrix):
-        affine_transform = sitk.AffineTransform(3)
-        registration_matrix = np.linalg.inv(registration_matrix)
-        affine_transform.SetMatrix(registration_matrix[:3, :3].ravel())
-        affine_transform.SetTranslation(registration_matrix[:3, -1])
-        return affine_transform
-
-
-# Adapted from Brian M Anderson's RegisteringImages repository # Source: https://github.com/brianmanderson/RegisteringImages/blob/main/src/RegisterImages/WithDicomReg.py
-def register_images_with_dicom_reg2(fixed_image: sitk.Image, moving_image: sitk.Image, registration_matrix,
-                                                                        min_value=-1000, method=sitk.sitkLinear):
-        """
-        register_images_with_dicom_reg2 Register a moving image to fixed image using known registratio_matrix from dicom registration file.
-                                        Function modified from https://github.com/brianmanderson/RegisteringImages.
-
-        :param fixed_image: The fixed image
-        :param moving_image: The moving image
-        :param registration_matrix: the DICOM registration matrix
-        :param min_value: Value to put as background in resampled image (-1000 for HU)
-        :param method: interpolating method, recommend sitk.sitkLinear for images and sitk.sitkNearestNeighbor for masks
-
-        :return: The registered moving SITK image.
-        """
-
-        affine_transform = sitk.AffineTransform(3)
-        registration_matrix = np.linalg.inv(registration_matrix)
-        affine_transform.SetMatrix(registration_matrix[:3, :3].ravel())
-        affine_transform.SetTranslation(registration_matrix[:3, -1])
-        moving_resampled = sitk.Resample(moving_image, fixed_image, affine_transform, method, min_value,
-                                                                         moving_image.GetPixelID())
-        return moving_resampled
-
-
-def register_point(point, registration_matrix):
-        """
-        register_point  Register a point according to a registration_matrix.
-
-        :param point: The point to register.
-        :param registration_matrix: the DICOM registration matrix.
-
-
-        :return: The registered point.
-        """
-
-        affine_transform = sitk.AffineTransform(3)
-
-        registration_matrix = np.linalg.inv(registration_matrix)
-        affine_transform.SetMatrix(registration_matrix[:3, :3].ravel())
-        affine_transform.SetTranslation(registration_matrix[:3, -1])
-        inverse_transform = affine_transform.GetInverse() #https://discourse.itk.org/t/simpleitk-registration-working-but-applying-the-transform-to-a-single-point-does-not/5728/4
-        point_resampled = inverse_transform.TransformPoint(point) 
-
-        return point_resampled
-
-def register_point_without_dicom_reg(point, transform):
-        point_resampled = transform.TransformPoint(point)
-        return point_resampled
-
-
-def register_images_without_dicom_reg(fixed_image,moving_image):
-        """
-        NOTE: Code modified from taken https://simpleitk.org/SPIE2019_COURSE/04_basic_registration.html
-
-        register_images_without_dicom_reg       Registers 2 images using optimizer when DICOM Reg file isn't available.
-
-        :param fixed_image: The fixed sitk image.
-        :param moving_image: The moving sitk image to registered.
-
-        :returns: The registered moving image.
-        """
-
-        #initial alignment of the two volumes
-        '''
-        print("JELLOOOO???")
-        initial_transform = sitk.CenteredTransformInitializer(sitk.Cast(fixed_image,moving_image.GetPixelID()), 
-                                                                                          moving_image, 
-                                                                                          sitk.Euler3DTransform(), 
-                                                                                          sitk.CenteredTransformInitializerFilter.GEOMETRY)
-        
-        registration_method = sitk.ImageRegistrationMethod()
-
-        # registration_method.SetMetricAsMattesMutualInformation(numberOfHistogramBins=50)
-        registration_method.SetMetricAsMeanSquares()
-        registration_method.SetMetricSamplingStrategy(registration_method.RANDOM)
-        registration_method.SetMetricSamplingPercentage(0.01)
-
-        registration_method.SetInterpolator(sitk.sitkLinear)
-
-        registration_method.SetOptimizerAsGradientDescent(learningRate=1, numberOfIterations=200)
-        
-        # Scale the step size differently for each parameter, this is critical!!!
-        registration_method.SetOptimizerScalesFromPhysicalShift() 
-
-        registration_method.SetInitialTransform(initial_transform, inPlace=False)
-
-        ## Plot optimization
-        registration_method.AddCommand(sitk.sitkStartEvent, registration_callbacks.metric_start_plot)
-        registration_method.AddCommand(sitk.sitkEndEvent, registration_callbacks.metric_end_plot)
-        registration_method.AddCommand(sitk.sitkIterationEvent, 
-                                                                   lambda: registration_callbacks.metric_plot_values(registration_method))
-
-        final_transform_v1 = registration_method.Execute(sitk.Cast(fixed_image, sitk.sitkFloat32), 
-                                                                                                         sitk.Cast(moving_image, sitk.sitkFloat32))
-
-        print('Final metric value:',(registration_method.GetMetricValue())      )
-        # print('Optimizer\'s stopping condition,', (registration_method.GetOptimizerStopConditionDescription()))
-        
-        
-
-        # Resample the moving image onto the fixed image's grid
-        resampler = sitk.ResampleImageFilter()
-        resampler.SetReferenceImage(fixed_image)
-        resampler.SetInterpolator(sitk.sitkLinear)
-        resampler.SetDefaultPixelValue(100)
-        resampler.SetTransform(final_transform)
-
-        moving_resampled = sitk.Resample(moving_image,fixed_image,final_transform_v1,sitk.sitkLinear,-1000,moving_image.GetPixelID())
-        # print(final_transform_v1)
-        '''
-        initial_transform = sitk.CenteredTransformInitializer(sitk.Cast(fixed_image,moving_image.GetPixelID()), moving_image, 
-                                                                                                          sitk.AffineTransform(3), sitk.CenteredTransformInitializerFilter.GEOMETRY)
-
-        registration_method = sitk.ImageRegistrationMethod()
-
-        registration_method.SetMetricAsMattesMutualInformation(numberOfHistogramBins=50)
-        # registration_method.SetMetricAsMeanSquares()
-        # registration_method.SetMetricAsCorrelation()
-        registration_method.SetMetricSamplingStrategy(registration_method.RANDOM)
-        registration_method.SetMetricSamplingPercentage(0.01)
-
-        registration_method.SetInterpolator(sitk.sitkLinear)
-
-        # registration_method.SetOptimizerAsGradientDescent(learningRate=.05, numberOfIterations=500,convergenceMinimumValue=1e-6)#, convergenceWindowSize=10)
-        registration_method.SetOptimizerAsRegularStepGradientDescent(
-                        learningRate=.5,
-                        minStep=1e-4,
-                        numberOfIterations=500,
-                        gradientMagnitudeTolerance=1e-8,
-                        relaxationFactor = 0.8
-
-                )
-        # Scale the step size differently for each parameter, this is critical!!!
-        # registration_method.SetOptimizerScalesFromPhysicalShift()
-        registration_method.SetOptimizerScalesFromIndexShift()
-
-
-
-        registration_method.SetInitialTransform(initial_transform, inPlace=False)
-
-        ## Plot optimization
-        registration_method.AddCommand(sitk.sitkStartEvent, metric_start_plot)
-        registration_method.AddCommand(sitk.sitkEndEvent, metric_end_plot)
-        registration_method.AddCommand(sitk.sitkIterationEvent, 
-                                                                   lambda: metric_plot_values(registration_method))
-
-        final_transform_v1 = registration_method.Execute(sitk.Cast(fixed_image, sitk.sitkFloat32), 
-                                                                                                         sitk.Cast(moving_image, sitk.sitkFloat32))
-
-        print('Final metric value:',(registration_method.GetMetricValue()))
-        print('Optimizer\'s stopping condition,', (registration_method.GetOptimizerStopConditionDescription()))
-
-
-        moving_resampled = sitk.Resample(moving_image,fixed_image,final_transform_v1,sitk.sitkLinear,-1000,moving_image.GetPixelID())
-        # print(final_transform_v1)
-
-
-        return moving_resampled, final_transform_v1, registration_method.GetMetricValue(), registration_method.GetOptimizerStopConditionDescription()
 
 def get_unregistered_dict(patient_path = patient_path):
         global image_dict
@@ -656,7 +443,7 @@ def register_CBCT_CT(CT, CBCT_list,use_reg_file = True,patient_path=patient_path
                         # print(registration_matrix)
                         transform = matrix_to_transform(registration_matrix)
                         # print(transform)
-                        resampled_cbct = register_images_with_dicom_reg2(fixed_image=CT_sitk, moving_image=CBCT_sitk, registration_matrix=registration_matrix)
+                        resampled_cbct = register_images_with_dicom_reg(fixed_image=CT_sitk, moving_image=CBCT_sitk, registration_matrix=registration_matrix)
                         registered_isocenter = register_point(isocenter, registration_matrix)
                 
                 resampled_cbct_list.append(resampled_cbct)
@@ -723,82 +510,6 @@ def register_CBCT_CBCT():
 
 
 
-        
-def find_CT1_CT2_registration_file_v2(patient_path, CT_list, CT1_ref, CT2_ref):
-        """
-        find_CT1_CT2_registration_file_v2       Finds the registration file for 2 CTs within the patient directory.
-
-        :param patient_path: Path to patient directory.
-        :param CT_list: List of CT directories.
-        :param CT1_ref: One of the CT reference UIDs.
-        :param CT2_ref: Another one fo th CT reference UIDs.
-
-        :returns: The directory name of the fixed (reference) CT and the registration_file.
-        """
-        
-                
-        list_REs= []
-        
-        REs_outside = False
-        RE_found = False
-
-        # Find REG files in CT direcories
-        for CT in CT_list:
-                if debug_print:
-                
-                        print("Searching for RE...")
-                        print(CT)
-                re_dirs = [f for f in os.listdir(patient_path+CT) if f[0:2] == 'RE']
-                if len(re_dirs)!=0:
-                        RE_found = True
-                list_REs.append([f for f in os.listdir(patient_path+CT) if f[0:2] == 'RE'])
-                if debug_print:
-                
-                        print(list_REs)
-
-        # If no RE files found, check for RE files outside of CT diretcories
-        if (not RE_found):
-                REs_outside = True
-                list_REs.append([f for f in os.listdir(patient_path) if f[0:2] == 'RE'])
-
-        # Check each registration file to see if they reference both of the CT UIDs
-        registration_file = ''
-        ref_CT = ''
-        for i in range(0,len(list_REs)):
-                for reg in list_REs[i]:
-                        if REs_outside:
-                                r1 = dcm.read_file(patient_path+'/'+reg)
-                        else:
-                                r1 = dcm.read_file(patient_path+CT_list[i]+'/'+reg)
-                        CT1_ref_exist = False
-                        CT2_ref_exist = False
-                        if debug_print:
-                
-                                print("-------",reg,"-------")
-                        for seq in r1.RegistrationSequence:
-                                class_UID = seq.ReferencedImageSequence[0].ReferencedSOPClassUID
-                #         if (dict_class_UID[class_UID] =='MR'):
-                #             list_REs[reg_index].remove(reg)
-
-                                # print(dict_class_UID[class_UID],seq.FrameOfReferenceUID)
-
-                                if (seq.FrameOfReferenceUID == CT1_ref):
-                                        CT1_ref_exist = True
-                                elif (seq.FrameOfReferenceUID == CT2_ref):
-                                        CT2_ref_exist = True
-
-                        if (CT1_ref_exist and CT2_ref_exist):
-                                ref_CT = CT_list[i]
-                                registration_file = reg
-                                reg_index = i
-                                if debug_print:
-                        
-                                        print("************************************************************************************************")
-                                        print("*               ",registration_file,"               *")
-                                        print("************************************************************************************************")
-                                continue
-
-        return ref_CT, registration_file
 
 def register_replan_CBCTs(second_replan=False):
         """
@@ -852,7 +563,7 @@ def register_replan_CBCTs(second_replan=False):
                 if debug_print:
                         print("replanreg")
                 if reg_exists:
-                        resampled_cbct = register_images_with_dicom_reg2(fixed_image=reference_CT_sitk, moving_image=CBCT_sitk, registration_matrix=registration_matrix)
+                        resampled_cbct = register_images_with_dicom_reg(fixed_image=reference_CT_sitk, moving_image=CBCT_sitk, registration_matrix=registration_matrix)
                 else:
                         print("replanned no reg")
                         # raise SystemExit()
@@ -980,7 +691,7 @@ def register_double_replan(dict_regs):
                 moving_reference_UID, registration_matrix = get_transformation_matrix(patient_path+reg_dir+'/'+reg_file)
                 
                 for CBCT_sitk in image_dict[moving_CT]['resampled_CBCTs']:
-                     resampled_cbct = register_images_with_dicom_reg2(fixed_image=reference_CT_sitk, moving_image=CBCT_sitk, registration_matrix=registration_matrix)
+                     resampled_cbct = register_images_with_dicom_reg(fixed_image=reference_CT_sitk, moving_image=CBCT_sitk, registration_matrix=registration_matrix)
                      resampled_cbct_list_2.append(resampled_cbct)
                 image_dict[moving_CT]['resampled_CBCTs'] = resampled_cbct_list_2
 
@@ -1001,13 +712,15 @@ def produce_plots(zoom=True,second_replan=False):
         rows_replan = 2 if replan else rows
         rows_replan_second = 3 if second_replan else rows_replan
 
-        print("Replan status: ", replan, second_replan)
-        print("rows: ", rows_replan_second)
+        middle_slice = int(len(sitk.GetArrayViewFromImage(image_dict[CT_list[0]]['resampled_CBCTs'][0]))/2)
+
+        print("Replan status: ", replan)#, second_replan)
+        # print("rows: ", rows_replan_second)
 
         # Plotting the first set of images
         for i in range(1, columns * rows + 1):
             try:
-                img = sitk.GetArrayViewFromImage(image_dict[CT_list[0]]['resampled_CBCTs'][i-1])[76]
+                img = sitk.GetArrayViewFromImage(image_dict[CT_list[0]]['resampled_CBCTs'][i-1])[middle_slice]
                 fig.add_subplot(rows_replan_second, columns, i)
                 plt.title(image_dict[CT_list[0]]['CBCTs'][i-1], fontsize=12)
                 if zoom:
@@ -1021,7 +734,7 @@ def produce_plots(zoom=True,second_replan=False):
         if replan:
             for i in range(columns * rows + 1, columns * rows_replan + 1):
                 try:
-                    img = sitk.GetArrayViewFromImage(image_dict[CT_list[1]]['resampled_CBCTs'][i - (columns * rows) - 1])[76]
+                    img = sitk.GetArrayViewFromImage(image_dict[CT_list[1]]['resampled_CBCTs'][i - (columns * rows) - 1])[middle_slice]
                     fig.add_subplot(rows_replan_second, columns, i)
                     plt.title(image_dict[CT_list[1]]['CBCTs'][i - (columns * rows) - 1], fontsize=12)
                     if zoom:
@@ -1035,7 +748,7 @@ def produce_plots(zoom=True,second_replan=False):
         if second_replan:
             for i in range(columns * rows_replan + 1, columns * rows_replan_second + 1):
                 try:
-                    img = sitk.GetArrayViewFromImage(image_dict[CT_list[2]]['resampled_CBCTs'][i - (columns * rows_replan) - 1])[76]
+                    img = sitk.GetArrayViewFromImage(image_dict[CT_list[2]]['resampled_CBCTs'][i - (columns * rows_replan) - 1])[middle_slice]
                     fig.add_subplot(rows_replan_second, columns, i)
                     plt.title(image_dict[CT_list[2]]['CBCTs'][i - (columns * rows_replan) - 1], fontsize=12)
                     if zoom:
@@ -1046,34 +759,6 @@ def produce_plots(zoom=True,second_replan=False):
                     print("Error plotting all:", e)
 
         plt.show()
-
-def save_transformation(transform,cbct_name,save_path = transform_save_path):
-        # save_path = '/data/kayla/HNC_images/transforms/'
-        save_name = cbct_name+'.tfm'
-
-        if not os.path.isdir(save_path):
-                os.mkdir(save_path)
-        sitk.WriteTransform(transform, save_path+save_name)
-
-# def save_transformation(transform,cbct_name):
-        
-#       save_name = patient_path.split('/')[-2]+'-'+cbct_name+'.tfm'
-#       sitk.WriteTransform(transform, save_path+save_name)
-
-def save_registered_CBCTs(input_path,save_path, patient, image_dict):
-    patient_save_path = os.path.join(save_path,patient)
-    if not os.path.isdir(patient_save_path):
-        os.mkdir(patient_save_path)
-    for CT in image_dict:
-        for i,CBCT_name in enumerate(image_dict[CT]['CBCTs']):
-            CBCT_path = os.path.join(input_path,CBCT_name)
-            # print(CBCT_name)
-            CBCT_sitk = image_dict[CT]['resampled_CBCTs'][i]
-            CBCT_save_path = os.path.join(patient_save_path, CBCT_name)
-            if not os.path.isdir(CBCT_save_path):
-                os.mkdir(CBCT_save_path)
-
-            save_dicoms(CBCT_path, CBCT_sitk, CBCT_save_path)    
 
 
 
@@ -1099,7 +784,7 @@ def register_patient(path, use_reg_file=True, plot=False,ignore_CT=False,use_tra
         image_dict.clear()
         replan = False
         has_dicom_reg = True
-        zoom = True
+        zoom = False
 
         if debug_print:
                 print("- Loading files from",patient_path," -")
