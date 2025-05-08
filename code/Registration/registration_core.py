@@ -107,6 +107,31 @@ def find_registration_file_two_images(image_path1, image_path2, opt_parent_searc
 	print("Warning: no registration file found")
 
 	return ref_CT, registration_file
+
+
+
+def find_moving_reference(RE_path):
+
+	RE = dcm.read_file(os.path.join(RE_path))
+	identity = [1., 0., 0., 0., 0., 1., 0., 0., 0., 0., 1., 0., 0., 0., 0., 1.]
+
+
+
+	
+	for seq in RE.RegistrationSequence:
+		
+	
+		registration_matrix = np.asarray(seq.MatrixRegistrationSequence[-1].MatrixSequence[-1].FrameOfReferenceTransformationMatrix)#.reshape((4, 4))
+	   
+		
+		if list(registration_matrix) == identity:
+			ref = seq.FrameOfReferenceUID
+
+		else:
+			move = seq.FrameOfReferenceUID
+	
+
+	return ref, move
 						
 def find_CT1_CT2_registration_file_v2(patient_path, CT_list, CT1_ref, CT2_ref):
 		"""
