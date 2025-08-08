@@ -1,4 +1,4 @@
-test# longiDICOM
+# longiDICOM
 
 A Python toolkit for longitudinal DICOM image registration, analysis, and visualization. It was made for registering and preprocessing our longitudinal radiotherapy dataset consisting of CBCT images, planning CTs, and DICOM-RT data (Structure Set, Dose, Treatment Record, etc.).
 If you're looking for registering two DICOM imagess, with or without a DICOM registration file, see `Examples/Sample Notebook - General Registration.ipynb` and the accompanying code in `code/Registration/dicom_registration.py`.
