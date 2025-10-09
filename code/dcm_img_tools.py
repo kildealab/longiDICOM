@@ -54,7 +54,7 @@ def save_dicom(slices,save_path,patient, CT_file,new_UID=False,new_id = ''):
         
 
 
-def change_uids(CT_path, output_file_path):
+def change_uids(CT_path, output_file_path,new_id = ''):
     new_series_instance_uid = generate_uid()
     new_study_instance_uid = generate_uid()
     
@@ -72,7 +72,9 @@ def change_uids(CT_path, output_file_path):
         dicom_data.SeriesInstanceUID = new_series_instance_uid
         dicom_data.StudyInstanceUID = new_study_instance_uid
 
-        dicom_data.PatientID = 'non_anon_test_id'
+        if new_id == '':
+            new_id = 'anon_test_id'
+        dicom_data.PatientID = new_id
         dicom_data.PatientName = CT_path.split('/')[-2]
         
         # Save the updated DICOM file
