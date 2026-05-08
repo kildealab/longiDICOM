@@ -1,5 +1,9 @@
 
 # from three import BufferGeometry, Vector3, Mesh, MeshPhongMaterial, Float32BufferAttribute, Uint8Array
+from rs_tools import find_ROI_names, get_all_ROI_contours
+from scipy import interpolate
+import numpy as np
+import matplotlib.pyplot as plt
 
 def distance(x1, y1, x2, y2):
     return np.sqrt((x2-x1)**2 + (y2-y1)**2)
@@ -13,6 +17,24 @@ def closest_index(x, y, array):
             dist = newdist
             index = j
     return index
+
+def plot_RS_structure(RS,structure,z_cutoff=-1000,colour='beige'):
+    body_ROI_names = find_ROI_names(RS,keyword=structure)
+    print("Contours containing the keyword",structure,":", body_ROI_names)
+    dict_contours_body, z_lists_body = get_all_ROI_contours(body_ROI_names, RS)
+    # roi_slice, z_smg_body = get_avg_ROI_z_and_slice(z_lists)
+    if structure not in list(dict_contours_body.keys()):
+        structure = body_ROI_names[0]
+    print("Rendering",structure,"contour...")
+    full_stack_int, keys = get_contour_stack(structure, dict_contours_body,z_cutoff)
+    pts, indices = render_body(full_stack_int,keys)
+    triangles = [indices[i:i+3] for i in range(0, len(indices), 3)]
+
+    fig = plt.figure()
+    ax = fig.add_subplot(projection='3d')
+    ax.plot_trisurf(pts[::3], pts[1::3], pts[2::3], triangles=triangles, alpha=1, shade=True,color=colour)
+    ax.set_aspect('equal', adjustable='box')
+    plt.show()
 
 def render_body(slices, keys):
     pts = []  # The 3D points making up the entire body
